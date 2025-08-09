@@ -190,11 +190,8 @@ function DroppableCell({
         minHeight: WEEK_ROW_HEIGHT,
         boxSizing: "border-box",
         position: "relative",
-        backgroundColor: highlight
-          ? "rgba(25,118,210,0.08)"
-          : isSelected
-            ? "rgba(56,142,60,0.14)"
-            : undefined,
+        backgroundColor: isSelected ? "rgba(25,118,210,0.14)" : undefined,
+
         "&::after": highlight
           ? {
               content: '""',
@@ -227,9 +224,9 @@ export default function CalendarMonth() {
 
   const [events, setEvents] = React.useState<CalendarEvent[]>([
     { start: 1, end: 3, label: "Short Trip", color: "#1976d2", time: "4:15pm" },
-    { start: 5, end: 10, label: "Workshop", color: "#0b7f08" },
-    { start: 3, end: 10, label: "Conference", color: "#525252" },
-    { start: 28, end: 31, label: "Quarter End", color: "#f57c00" },
+    { start: 5, end: 10, label: "Workshop", color: "#1976d2" },
+    { start: 3, end: 10, label: "Conference", color: "#1976d2" },
+    { start: 28, end: 31, label: "Quarter End", color: "#1976d2" },
   ]);
 
   const daysInMonth = new Date(year, month + 1, 0).getDate();
@@ -242,11 +239,17 @@ export default function CalendarMonth() {
     [events, daysInMonth, startDay]
   );
 
-  const [draggedEventIndex, setDraggedEventIndex] = React.useState<number | null>(null);
-  const [hoverCellIndex, setHoverCellIndex] = React.useState<number | null>(null);
+  const [draggedEventIndex, setDraggedEventIndex] = React.useState<
+    number | null
+  >(null);
+  const [hoverCellIndex, setHoverCellIndex] = React.useState<number | null>(
+    null
+  );
 
   // For drag-to-create
-  const [selectStartCell, setSelectStartCell] = React.useState<number | null>(null);
+  const [selectStartCell, setSelectStartCell] = React.useState<number | null>(
+    null
+  );
   const [selectEndCell, setSelectEndCell] = React.useState<number | null>(null);
   const isDraggingNew = selectStartCell !== null && selectEndCell !== null;
 
@@ -361,8 +364,10 @@ export default function CalendarMonth() {
       const dayA = selectStartCell - startDay + 1;
       const dayB = selectEndCell - startDay + 1;
       if (
-        dayA >= 1 && dayA <= daysInMonth &&
-        dayB >= 1 && dayB <= daysInMonth
+        dayA >= 1 &&
+        dayA <= daysInMonth &&
+        dayB >= 1 &&
+        dayB <= daysInMonth
       ) {
         const newStart = Math.min(dayA, dayB);
         const newEnd = Math.max(dayA, dayB);
@@ -372,7 +377,7 @@ export default function CalendarMonth() {
             start: newStart,
             end: newEnd,
             label: "New Task",
-            color: "#388e3c",
+            color: "#1976d2",
           },
         ]);
       }
@@ -401,15 +406,18 @@ export default function CalendarMonth() {
       return [];
     const dayA = selectStartCell - startDay + 1;
     const dayB = selectEndCell - startDay + 1;
-    if (
-      dayA < 1 || dayA > daysInMonth ||
-      dayB < 1 || dayB > daysInMonth
-    )
+    if (dayA < 1 || dayA > daysInMonth || dayB < 1 || dayB > daysInMonth)
       return [];
     const newStart = Math.min(dayA, dayB);
     const duration = Math.abs(dayA - dayB) + 1;
     return previewSegmentsFor(newStart, duration);
-  }, [selectStartCell, selectEndCell, startDay, daysInMonth, draggedEventIndex]);
+  }, [
+    selectStartCell,
+    selectEndCell,
+    startDay,
+    daysInMonth,
+    draggedEventIndex,
+  ]);
 
   const allCells = Array.from({ length: totalCells }).map((_, cellIndex) => {
     const dayNum = cellIndex - startDay + 1;
@@ -418,8 +426,8 @@ export default function CalendarMonth() {
     // For drag-to-create selection
     const isSelected =
       isDraggingNew &&
-      (cellIndex >= Math.min(selectStartCell!, selectEndCell!) &&
-        cellIndex <= Math.max(selectStartCell!, selectEndCell!));
+      cellIndex >= Math.min(selectStartCell!, selectEndCell!) &&
+      cellIndex <= Math.max(selectStartCell!, selectEndCell!);
     return (
       <DroppableCell
         key={cellIndex}
@@ -533,6 +541,11 @@ export default function CalendarMonth() {
           const topPx =
             weekIndex * WEEK_ROW_HEIGHT +
             nextTrack * (TRACK_HEIGHT + TRACK_GAP);
+
+          const isStart =
+            pseg.startCol === Math.min(...selectPreview.map((s) => s.startCol));
+          const eventColor = " #1976d2";
+
           return (
             <Box
               key={`select-preview-${i}`}
@@ -543,21 +556,25 @@ export default function CalendarMonth() {
                 top: topPx,
                 height: TRACK_HEIGHT,
                 borderRadius: 6,
-                backgroundColor: "rgba(56,142,60,0.18)",
-                border: "1px dashed rgba(56,142,60,0.5)",
+                backgroundColor: eventColor,
+                color: "#fff",
                 zIndex: 900,
                 display: "flex",
                 alignItems: "center",
                 px: 1,
+                overflow: "hidden",
+                whiteSpace: "nowrap",
+                textOverflow: "ellipsis",
+                opacity: 0.8, // slight transparency to show it's a preview
                 pointerEvents: "none",
               }}
             >
-              <Typography
-                variant="body2"
-                sx={{ fontSize: 13, color: "rgba(0,0,0,0.85)" }}
-              >
-                New Task
-              </Typography>
+              {isStart && (
+                <strong style={{ marginRight: 8, fontSize: 12 }}>
+                  {/* Optional time display for new events */}
+                </strong>
+              )}
+              <span style={{ fontSize: 13 }}>New Task</span>
             </Box>
           );
         })}
