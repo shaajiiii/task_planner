@@ -164,10 +164,18 @@ function DroppableCell({
   cellIndex,
   children,
   highlight,
+  isSelected,
+  onCellPointerDown,
+  onCellPointerEnter,
+  onCellPointerUp,
 }: {
   cellIndex: number;
   children?: React.ReactNode;
   highlight?: boolean;
+  isSelected?: boolean;
+  onCellPointerDown?: (cellIndex: number) => void;
+  onCellPointerEnter?: (cellIndex: number) => void;
+  onCellPointerUp?: (cellIndex: number) => void;
 }) {
   const { setNodeRef } = useDroppable({ id: `cell-${cellIndex}` });
 
@@ -182,7 +190,11 @@ function DroppableCell({
         minHeight: WEEK_ROW_HEIGHT,
         boxSizing: "border-box",
         position: "relative",
-        backgroundColor: highlight ? "rgba(25,118,210,0.08)" : undefined,
+        backgroundColor: highlight
+          ? "rgba(25,118,210,0.08)"
+          : isSelected
+            ? "rgba(56,142,60,0.14)"
+            : undefined,
         "&::after": highlight
           ? {
               content: '""',
@@ -196,6 +208,13 @@ function DroppableCell({
             }
           : undefined,
       }}
+      onPointerDown={(e) => {
+        if (onCellPointerDown && e.button === 0) {
+          onCellPointerDown(cellIndex);
+        }
+      }}
+      onPointerEnter={() => onCellPointerEnter?.(cellIndex)}
+      onPointerUp={() => onCellPointerUp?.(cellIndex)}
     >
       {children}
     </Box>
@@ -223,12 +242,13 @@ export default function CalendarMonth() {
     [events, daysInMonth, startDay]
   );
 
-  const [draggedEventIndex, setDraggedEventIndex] = React.useState<
-    number | null
-  >(null);
-  const [hoverCellIndex, setHoverCellIndex] = React.useState<number | null>(
-    null
-  );
+  const [draggedEventIndex, setDraggedEventIndex] = React.useState<number | null>(null);
+  const [hoverCellIndex, setHoverCellIndex] = React.useState<number | null>(null);
+
+  // For drag-to-create
+  const [selectStartCell, setSelectStartCell] = React.useState<number | null>(null);
+  const [selectEndCell, setSelectEndCell] = React.useState<number | null>(null);
+  const isDraggingNew = selectStartCell !== null && selectEndCell !== null;
 
   function previewSegmentsFor(newStartDay: number, durationDays: number) {
     const segs: { weekIndex: number; startCol: number; endCol: number }[] = [];
@@ -247,6 +267,7 @@ export default function CalendarMonth() {
     return segs;
   }
 
+  // Drag-and-drop event moving logic
   function handleDragStart(event: DragStartEvent) {
     const activeId = event.active.id;
     if (typeof activeId === "string" && activeId.startsWith("event-")) {
@@ -325,6 +346,41 @@ export default function CalendarMonth() {
     setDraggedEventIndex(null);
   }
 
+  // --- Drag-to-Create Handlers ---
+  function handleCellPointerDown(cellIdx: number) {
+    // Don't do drag-to-create if currently DnD-moving an event
+    if (draggedEventIndex !== null) return;
+    setSelectStartCell(cellIdx);
+    setSelectEndCell(cellIdx);
+  }
+  function handleCellPointerEnter(cellIdx: number) {
+    if (selectStartCell !== null) setSelectEndCell(cellIdx);
+  }
+  function handleCellPointerUp(cellIdx: number) {
+    if (selectStartCell !== null && selectEndCell !== null) {
+      const dayA = selectStartCell - startDay + 1;
+      const dayB = selectEndCell - startDay + 1;
+      if (
+        dayA >= 1 && dayA <= daysInMonth &&
+        dayB >= 1 && dayB <= daysInMonth
+      ) {
+        const newStart = Math.min(dayA, dayB);
+        const newEnd = Math.max(dayA, dayB);
+        setEvents((prev) => [
+          ...prev,
+          {
+            start: newStart,
+            end: newEnd,
+            label: "New Task",
+            color: "#388e3c",
+          },
+        ]);
+      }
+    }
+    setSelectStartCell(null);
+    setSelectEndCell(null);
+  }
+
   const previewSegments = React.useMemo(() => {
     if (draggedEventIndex == null || hoverCellIndex == null) return [];
     const ev = events[draggedEventIndex];
@@ -335,15 +391,44 @@ export default function CalendarMonth() {
     return previewSegmentsFor(newDay, duration);
   }, [draggedEventIndex, hoverCellIndex, events, startDay, daysInMonth]);
 
+  // For drag-to-create: "ghost" preview
+  const selectPreview = React.useMemo(() => {
+    if (
+      selectStartCell == null ||
+      selectEndCell == null ||
+      draggedEventIndex !== null
+    )
+      return [];
+    const dayA = selectStartCell - startDay + 1;
+    const dayB = selectEndCell - startDay + 1;
+    if (
+      dayA < 1 || dayA > daysInMonth ||
+      dayB < 1 || dayB > daysInMonth
+    )
+      return [];
+    const newStart = Math.min(dayA, dayB);
+    const duration = Math.abs(dayA - dayB) + 1;
+    return previewSegmentsFor(newStart, duration);
+  }, [selectStartCell, selectEndCell, startDay, daysInMonth, draggedEventIndex]);
+
   const allCells = Array.from({ length: totalCells }).map((_, cellIndex) => {
     const dayNum = cellIndex - startDay + 1;
     const visible = dayNum >= 1 && dayNum <= daysInMonth;
     const highlight = hoverCellIndex === cellIndex;
+    // For drag-to-create selection
+    const isSelected =
+      isDraggingNew &&
+      (cellIndex >= Math.min(selectStartCell!, selectEndCell!) &&
+        cellIndex <= Math.max(selectStartCell!, selectEndCell!));
     return (
       <DroppableCell
         key={cellIndex}
         cellIndex={cellIndex}
         highlight={highlight}
+        isSelected={isSelected}
+        onCellPointerDown={handleCellPointerDown}
+        onCellPointerEnter={handleCellPointerEnter}
+        onCellPointerUp={handleCellPointerUp}
       >
         <Typography variant="body2">{visible ? dayNum : ""}</Typography>
       </DroppableCell>
@@ -391,7 +476,7 @@ export default function CalendarMonth() {
           })
         )}
 
-        {/* Render preview segments */}
+        {/* Render preview segments for drag-to-move */}
         {previewSegments.map((pseg, i) => {
           const leftPct = (pseg.startCol - 1) * (100 / 7);
           const widthPct = (pseg.endCol - pseg.startCol + 1) * (100 / 7);
@@ -430,6 +515,48 @@ export default function CalendarMonth() {
                 {draggedEventIndex != null
                   ? events[draggedEventIndex].label
                   : ""}
+              </Typography>
+            </Box>
+          );
+        })}
+
+        {/* Render preview for drag-to-create */}
+        {selectPreview.map((pseg, i) => {
+          const leftPct = (pseg.startCol - 1) * (100 / 7);
+          const widthPct = (pseg.endCol - pseg.startCol + 1) * (100 / 7);
+          const weekIndex = pseg.weekIndex;
+          const existingSegs = segmentsByWeek.get(weekIndex) ?? [];
+          const nextTrack =
+            existingSegs.length > 0
+              ? Math.max(...existingSegs.map((s) => s.trackIndex ?? 0)) + 1
+              : 0;
+          const topPx =
+            weekIndex * WEEK_ROW_HEIGHT +
+            nextTrack * (TRACK_HEIGHT + TRACK_GAP);
+          return (
+            <Box
+              key={`select-preview-${i}`}
+              sx={{
+                position: "absolute",
+                left: `${leftPct}%`,
+                width: `${widthPct}%`,
+                top: topPx,
+                height: TRACK_HEIGHT,
+                borderRadius: 6,
+                backgroundColor: "rgba(56,142,60,0.18)",
+                border: "1px dashed rgba(56,142,60,0.5)",
+                zIndex: 900,
+                display: "flex",
+                alignItems: "center",
+                px: 1,
+                pointerEvents: "none",
+              }}
+            >
+              <Typography
+                variant="body2"
+                sx={{ fontSize: 13, color: "rgba(0,0,0,0.85)" }}
+              >
+                New Task
               </Typography>
             </Box>
           );
