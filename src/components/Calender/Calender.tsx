@@ -1,10 +1,6 @@
 import * as React from "react";
 import { Box, Typography } from "@mui/material";
-import {
-  DndContext,
-  useDraggable,
-  useDroppable,
-} from "@dnd-kit/core";
+import { DndContext, useDraggable, useDroppable } from "@dnd-kit/core";
 import type {
   DragStartEvent,
   DragOverEvent,
@@ -32,7 +28,7 @@ type Segment = {
 
 const TRACK_HEIGHT = 20;
 const TRACK_GAP = 6;
-const WEEK_ROW_HEIGHT = 80;
+const WEEK_ROW_HEIGHT = 130;
 
 function getDayOfWeek(year: number, month: number, day: number): number {
   return new Date(year, month, day).getDay();
@@ -57,8 +53,7 @@ function splitEventsIntoSegments(
       const weekStartCol = currentWeek * 7;
       const weekEndCol = weekStartCol + 6;
       const segmentStartCol = currentStart - weekStartCol + 1;
-      const segmentEndCol =
-        Math.min(endOffset, weekEndCol) - weekStartCol + 1;
+      const segmentEndCol = Math.min(endOffset, weekEndCol) - weekStartCol + 1;
 
       const segment: Segment = {
         event,
@@ -110,14 +105,19 @@ function DraggableEvent({
   seg,
   id,
   dimmed,
-}: { seg: Segment; id: string; dimmed?: boolean }) {
+}: {
+  seg: Segment;
+  id: string;
+  dimmed?: boolean;
+}) {
   const { attributes, listeners, setNodeRef, transform } = useDraggable({ id });
 
   const leftPct = (seg.startCol - 1) * (100 / 7);
   const widthPct = (seg.endCol - seg.startCol + 1) * (100 / 7);
   const topPx =
     seg.weekIndex * WEEK_ROW_HEIGHT +
-    (seg.trackIndex ?? 0) * (TRACK_HEIGHT + TRACK_GAP) + 30;
+    (seg.trackIndex ?? 0) * (TRACK_HEIGHT + TRACK_GAP) +
+    30;
 
   const style: React.CSSProperties = {
     transform: transform
@@ -128,9 +128,7 @@ function DraggableEvent({
     width: `${widthPct}%`,
     top: topPx,
     height: TRACK_HEIGHT,
-    backgroundColor: dimmed
-      ? "#e0e0e0"
-      : seg.event.color ?? "#1976d2",
+    backgroundColor: dimmed ? "#e0e0e0" : seg.event.color ?? "#1976d2",
     color: dimmed ? "#757575" : "#fff",
     display: "flex",
     alignItems: "center",
@@ -225,8 +223,12 @@ export default function CalendarMonth() {
     [events, daysInMonth, startDay]
   );
 
-  const [draggedEventIndex, setDraggedEventIndex] = React.useState<number | null>(null);
-  const [hoverCellIndex, setHoverCellIndex] = React.useState<number | null>(null);
+  const [draggedEventIndex, setDraggedEventIndex] = React.useState<
+    number | null
+  >(null);
+  const [hoverCellIndex, setHoverCellIndex] = React.useState<number | null>(
+    null
+  );
 
   function previewSegmentsFor(newStartDay: number, durationDays: number) {
     const segs: { weekIndex: number; startCol: number; endCol: number }[] = [];
@@ -338,7 +340,11 @@ export default function CalendarMonth() {
     const visible = dayNum >= 1 && dayNum <= daysInMonth;
     const highlight = hoverCellIndex === cellIndex;
     return (
-      <DroppableCell key={cellIndex} cellIndex={cellIndex} highlight={highlight}>
+      <DroppableCell
+        key={cellIndex}
+        cellIndex={cellIndex}
+        highlight={highlight}
+      >
         <Typography variant="body2">{visible ? dayNum : ""}</Typography>
       </DroppableCell>
     );
@@ -396,7 +402,8 @@ export default function CalendarMonth() {
               ? Math.max(...existingSegs.map((s) => s.trackIndex ?? 0)) + 1
               : 0;
           const topPx =
-            weekIndex * WEEK_ROW_HEIGHT + nextTrack * (TRACK_HEIGHT + TRACK_GAP);
+            weekIndex * WEEK_ROW_HEIGHT +
+            nextTrack * (TRACK_HEIGHT + TRACK_GAP);
           return (
             <Box
               key={`preview-${i}`}
@@ -416,8 +423,13 @@ export default function CalendarMonth() {
                 pointerEvents: "none",
               }}
             >
-              <Typography variant="body2" sx={{ fontSize: 13, color: "rgba(0,0,0,0.85)" }}>
-                {draggedEventIndex != null ? events[draggedEventIndex].label : ""}
+              <Typography
+                variant="body2"
+                sx={{ fontSize: 13, color: "rgba(0,0,0,0.85)" }}
+              >
+                {draggedEventIndex != null
+                  ? events[draggedEventIndex].label
+                  : ""}
               </Typography>
             </Box>
           );
