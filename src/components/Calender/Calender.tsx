@@ -29,6 +29,7 @@ type Segment = {
 const TRACK_HEIGHT = 20;
 const TRACK_GAP = 6;
 const WEEK_ROW_HEIGHT = 130;
+const TOP_OFFSET__FOR_TASKS = 30;
 
 function getDayOfWeek(year: number, month: number, day: number): number {
   return new Date(year, month, day).getDay();
@@ -117,7 +118,7 @@ function DraggableEvent({
   const topPx =
     seg.weekIndex * WEEK_ROW_HEIGHT +
     (seg.trackIndex ?? 0) * (TRACK_HEIGHT + TRACK_GAP) +
-    30;
+    TOP_OFFSET__FOR_TASKS;
 
   const style: React.CSSProperties = {
     transform: transform
@@ -534,13 +535,30 @@ export default function CalendarMonth() {
           const widthPct = (pseg.endCol - pseg.startCol + 1) * (100 / 7);
           const weekIndex = pseg.weekIndex;
           const existingSegs = segmentsByWeek.get(weekIndex) ?? [];
-          const nextTrack =
-            existingSegs.length > 0
-              ? Math.max(...existingSegs.map((s) => s.trackIndex ?? 0)) + 1
-              : 0;
+          //   const nextTrack =
+          //     existingSegs.length > 0
+          //       ? Math.max(...existingSegs.map((s) => s.trackIndex ?? 0)) + 1
+          //       : 0;
+
+          let nextTrack = 0;
+          while (true) {
+            const conflict = existingSegs.some(
+              (s) =>
+                s.trackIndex === nextTrack &&
+                !(
+                  (
+                    pseg.endCol < s.startCol || // preview ends before this segment starts
+                    pseg.startCol > s.endCol
+                  ) // preview starts after this segment ends
+                )
+            );
+            if (!conflict) break;
+            nextTrack++;
+          }
           const topPx =
             weekIndex * WEEK_ROW_HEIGHT +
-            nextTrack * (TRACK_HEIGHT + TRACK_GAP);
+            nextTrack * (TRACK_HEIGHT + TRACK_GAP) +
+            TOP_OFFSET__FOR_TASKS;
 
           const isStart =
             pseg.startCol === Math.min(...selectPreview.map((s) => s.startCol));
