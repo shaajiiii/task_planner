@@ -9,10 +9,9 @@ import MenuItem from "@mui/material/MenuItem";
 
 export interface TaskModalProps {
   open: boolean;
-  initialTitle?: string;
-  initialStatus?: string;
+  selectedEvent: any; // m: change to the exact type
   onClose: () => void;
-  onSave: (title: string, status: string) => void;
+  onSave: (eventToBeSaved: any) => void; // m: change to the exact type
 }
 
 const statusOptions = [
@@ -22,26 +21,33 @@ const statusOptions = [
 ];
 
 function TaskModal(props: TaskModalProps) {
-  const { open, onClose, onSave, initialTitle = "", initialStatus = "pending" } = props;
+  const { open, onClose, onSave, selectedEvent } = props;
 
-  const [title, setTitle] = React.useState(initialTitle);
-  const [status, setStatus] = React.useState(initialStatus);
+  const [title, setTitle] = React.useState(selectedEvent?.label);
+  const [status, setStatus] = React.useState(selectedEvent?.status);
 
   // Reset inputs when modal opens
   React.useEffect(() => {
     if (open) {
-      setTitle(initialTitle);
-      setStatus(initialStatus);
+      setTitle(selectedEvent?.label);
+      setStatus(selectedEvent?.status);
     }
-  }, [open, initialTitle, initialStatus]);
+  }, [open, selectedEvent]);
 
   const handleSave = () => {
-    onSave(title.trim(), status);
+    const eventToBeSaved = {
+      ...selectedEvent,
+      label: title.trim(),
+      status,
+    };
+    onSave(eventToBeSaved);
   };
 
   return (
     <Dialog onClose={onClose} open={open}>
-      <DialogTitle>{initialTitle ? "Edit Task" : "Add New Task"}</DialogTitle>
+      <DialogTitle>
+        {selectedEvent?.label ? "Edit Task" : "Add New Task"}
+      </DialogTitle>
       <DialogContent dividers>
         <TextField
           value={title}
@@ -71,7 +77,7 @@ function TaskModal(props: TaskModalProps) {
         <Button
           onClick={handleSave}
           variant="contained"
-          disabled={title.trim() === ""}
+          disabled={title?.trim() === ""}
         >
           Save
         </Button>

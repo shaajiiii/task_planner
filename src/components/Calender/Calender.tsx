@@ -15,6 +15,7 @@ type CalendarEvent = {
   label: string;
   color?: string;
   time?: string;
+  status: string;
 };
 
 type Segment = {
@@ -38,7 +39,7 @@ function getDayOfWeek(year: number, month: number, day: number): number {
 
 function splitEventsIntoSegments(
   events: CalendarEvent[],
-  daysInMonth: number,
+  // daysInMonth: number,
   startDay: number
 ): Map<number, Segment[]> {
   const segmentsByWeek = new Map<number, Segment[]>();
@@ -177,7 +178,7 @@ function DroppableCell({
   //   isSelected?: boolean;
   onCellPointerDown?: (cellIndex: number) => void;
   onCellPointerEnter?: (cellIndex: number) => void;
-  onCellPointerUp?: (cellIndex: number) => void;
+  onCellPointerUp?: () => void;
 }) {
   const { setNodeRef } = useDroppable({ id: `cell-${cellIndex}` });
 
@@ -213,7 +214,7 @@ function DroppableCell({
         }
       }}
       onPointerEnter={() => onCellPointerEnter?.(cellIndex)}
-      onPointerUp={() => onCellPointerUp?.(cellIndex)}
+      onPointerUp={() => onCellPointerUp?.()}
     >
       {children}
     </Box>
@@ -224,12 +225,27 @@ export default function CalendarMonth() {
   const year = 2024;
   const month = 9; // October (0-based)
 
-  const [events, setEvents] = React.useState<CalendarEvent[]>([
-    { start: 1, end: 3, label: "Short Trip", color: "#1976d2", time: "4:15pm" },
-    { start: 5, end: 10, label: "Workshop", color: "#1976d2" },
-    { start: 3, end: 10, label: "Conference", color: "#1976d2" },
-    { start: 28, end: 31, label: "Quarter End", color: "#1976d2" },
-  ]);
+  const [events, setEvents] = React.useState<CalendarEvent[]>([]);
+
+  // Modal states and functions ----------
+  const [selectedEvent, setSelectedEvent] =
+    React.useState<CalendarEvent | null>(null);
+
+  const [openTaskModal, setOpenTaskModal] = React.useState<boolean>(false);
+
+  const closeTaskModal = React.useCallback(() => {
+    setOpenTaskModal(false);
+  }, []);
+
+  const saveEventToMainEventsState = React.useCallback(
+    (newOrUpdatedEvent: CalendarEvent) => {
+      setEvents((prev) => [...prev, newOrUpdatedEvent]);
+      setOpenTaskModal(false);
+    },
+    []
+  );
+
+  // Modal states and functions ==========
 
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const startDay = getDayOfWeek(year, month, 1);
@@ -237,7 +253,7 @@ export default function CalendarMonth() {
   const totalCells = weeksCount * 7;
 
   const segmentsByWeek = React.useMemo(
-    () => splitEventsIntoSegments(events, daysInMonth, startDay),
+    () => splitEventsIntoSegments(events, startDay),
     [events, daysInMonth, startDay]
   );
 
@@ -253,7 +269,7 @@ export default function CalendarMonth() {
     null
   );
   const [selectEndCell, setSelectEndCell] = React.useState<number | null>(null);
-  const isDraggingNew = selectStartCell !== null && selectEndCell !== null;
+  // const isDraggingNew = selectStartCell !== null && selectEndCell !== null;
 
   function previewSegmentsFor(newStartDay: number, durationDays: number) {
     const segs: { weekIndex: number; startCol: number; endCol: number }[] = [];
@@ -361,7 +377,7 @@ export default function CalendarMonth() {
   function handleCellPointerEnter(cellIdx: number) {
     if (selectStartCell !== null) setSelectEndCell(cellIdx);
   }
-  function handleCellPointerUp(cellIdx: number) {
+  function handleCellPointerUp() {
     if (selectStartCell !== null && selectEndCell !== null) {
       const dayA = selectStartCell - startDay + 1;
       const dayB = selectEndCell - startDay + 1;
@@ -373,15 +389,15 @@ export default function CalendarMonth() {
       ) {
         const newStart = Math.min(dayA, dayB);
         const newEnd = Math.max(dayA, dayB);
-        setEvents((prev) => [
-          ...prev,
-          {
-            start: newStart,
-            end: newEnd,
-            label: "New Task",
-            color: "#1976d2",
-          },
-        ]);
+        // creating a temporary event
+        setSelectedEvent({
+          start: newStart,
+          end: newEnd,
+          label: "",
+          color: "#1976d2",
+          status: "pending",
+        });
+        setOpenTaskModal(true);
       }
     }
     setSelectStartCell(null);
@@ -611,14 +627,13 @@ export default function CalendarMonth() {
           })}
         </Box>
       </DndContext>{" "}
-      {/* <TaskModal />{" "} */}
       <TaskModal
-        open={true}
-        // initialTitle={modalTask?.title}
-        // initialStatus={modalTask?.status}
-        onClose={() => {}}
-        onSave={() => {}}
+        open={openTaskModal}
+        selectedEvent={selectedEvent}
+        onClose={closeTaskModal}
+        onSave={saveEventToMainEventsState}
       />
+      {console.log(events)}
     </>
   );
 }
