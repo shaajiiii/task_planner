@@ -1,6 +1,14 @@
 import * as React from "react";
-import { Box, Typography } from "@mui/material";
-import { DndContext, useDraggable, useDroppable } from "@dnd-kit/core";
+import { Box, Popover, Typography } from "@mui/material";
+import {
+  DndContext,
+  useDraggable,
+  useDroppable,
+  MouseSensor,
+  TouchSensor,
+  useSensor,
+  useSensors,
+} from "@dnd-kit/core";
 import type {
   DragStartEvent,
   DragOverEvent,
@@ -39,7 +47,6 @@ function getDayOfWeek(year: number, month: number, day: number): number {
 
 function splitEventsIntoSegments(
   events: CalendarEvent[],
-  // daysInMonth: number,
   startDay: number
 ): Map<number, Segment[]> {
   const segmentsByWeek = new Map<number, Segment[]>();
@@ -108,11 +115,18 @@ function DraggableEvent({
   seg,
   id,
   dimmed,
+  onClick,
 }: {
   seg: Segment;
   id: string;
   dimmed?: boolean;
+  onClick?: (e: React.MouseEvent<HTMLElement>) => void;
 }) {
+  // small movement threshold (match activationConstraint)
+  const CLICK_MOVE_THRESHOLD = 6;
+
+  const startPosRef = React.useRef<{ x: number; y: number } | null>(null);
+
   const { attributes, listeners, setNodeRef, transform } = useDraggable({ id });
 
   const leftPct = (seg.startCol - 1) * (100 / 7);
@@ -143,13 +157,38 @@ function DraggableEvent({
     textOverflow: "ellipsis",
     zIndex: transform ? 1000 : 2,
     opacity: dimmed ? 0.7 : 1,
+    userSelect: "none",
+    touchAction: "manipulation",
+  };
+
+  const handlePointerDown = (e: React.PointerEvent) => {
+    // only left button
+    if ("button" in e && e.button !== 0) return;
+    startPosRef.current = { x: e.clientX, y: e.clientY };
+    // call dnd-kit listener with native event (more reliable)
+    listeners?.onPointerDown?.(e.nativeEvent as unknown as PointerEvent);
+  };
+
+  const handlePointerUp = (e: React.PointerEvent) => {
+    const start = startPosRef.current;
+    startPosRef.current = null;
+    if (!start) return;
+    const moved = Math.abs(e.clientX - start.x) + Math.abs(e.clientY - start.y);
+    if (moved < CLICK_MOVE_THRESHOLD) {
+      // treat as click
+      onClick?.(e as unknown as React.MouseEvent<HTMLElement>);
+    }
+    // no need to call listeners.onPointerUp
   };
 
   return (
     <div
       ref={setNodeRef}
+      // spread listeners first so we still have access to them, then override pointerDown to call both
       {...listeners}
       {...attributes}
+      onPointerDown={handlePointerDown}
+      onPointerUp={handlePointerUp}
       style={style}
       title={`${seg.event.label} (${seg.event.start}-${seg.event.end})`}
     >
@@ -167,7 +206,6 @@ function DroppableCell({
   cellIndex,
   children,
   highlight,
-  //   isSelected,
   onCellPointerDown,
   onCellPointerEnter,
   onCellPointerUp,
@@ -175,7 +213,6 @@ function DroppableCell({
   cellIndex: number;
   children?: React.ReactNode;
   highlight?: boolean;
-  //   isSelected?: boolean;
   onCellPointerDown?: (cellIndex: number) => void;
   onCellPointerEnter?: (cellIndex: number) => void;
   onCellPointerUp?: () => void;
@@ -193,8 +230,6 @@ function DroppableCell({
         minHeight: WEEK_ROW_HEIGHT,
         boxSizing: "border-box",
         position: "relative",
-        // backgroundColor: highlight ? "rgba(25,118,210,0.14)" : undefined,
-
         "&::after": highlight
           ? {
               content: '""',
@@ -245,7 +280,51 @@ export default function CalendarMonth() {
     []
   );
 
-  // Modal states and functions ==========
+  // pop over states and functions ------------------------
+  const [popoverAnchor, setPopoverAnchor] = React.useState<HTMLElement | null>(
+    null
+  );
+  const [popoverEvent, setPopoverEvent] = React.useState<CalendarEvent | null>(
+    null
+  );
+
+  const handleEventClick = (
+    event: React.MouseEvent<HTMLElement>,
+    evData: CalendarEvent
+  ) => {
+    setPopoverAnchor(event.currentTarget);
+    setPopoverEvent(evData);
+  };
+
+  const handlePopoverClose = () => {
+    setPopoverAnchor(null);
+    setPopoverEvent(null);
+  };
+
+  const handleEditEvent = () => {
+    if (popoverEvent) {
+      setSelectedEvent(popoverEvent);
+      setOpenTaskModal(true);
+    }
+    handlePopoverClose();
+  };
+
+  const handleDeleteEvent = () => {
+    if (popoverEvent) {
+      setEvents((prev) => prev.filter((e) => e !== popoverEvent));
+    }
+    handlePopoverClose();
+  };
+
+  // sensors: ensure drag doesn't start until user moves enough
+  const MOUSE_ACTIVATION_DISTANCE = 6;
+  const mouseSensor = useSensor(MouseSensor, {
+    activationConstraint: { distance: MOUSE_ACTIVATION_DISTANCE },
+  });
+  const touchSensor = useSensor(TouchSensor, {
+    activationConstraint: { delay: 150, tolerance: 5 },
+  });
+  const sensors = useSensors(mouseSensor, touchSensor);
 
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const startDay = getDayOfWeek(year, month, 1);
@@ -269,7 +348,6 @@ export default function CalendarMonth() {
     null
   );
   const [selectEndCell, setSelectEndCell] = React.useState<number | null>(null);
-  // const isDraggingNew = selectStartCell !== null && selectEndCell !== null;
 
   function previewSegmentsFor(newStartDay: number, durationDays: number) {
     const segs: { weekIndex: number; startCol: number; endCol: number }[] = [];
@@ -369,7 +447,6 @@ export default function CalendarMonth() {
 
   // --- Drag-to-Create Handlers ---
   function handleCellPointerDown(cellIdx: number) {
-    // Don't do drag-to-create if currently DnD-moving an event
     if (draggedEventIndex !== null) return;
     setSelectStartCell(cellIdx);
     setSelectEndCell(cellIdx);
@@ -389,7 +466,6 @@ export default function CalendarMonth() {
       ) {
         const newStart = Math.min(dayA, dayB);
         const newEnd = Math.max(dayA, dayB);
-        // creating a temporary event
         setSelectedEvent({
           start: newStart,
           end: newEnd,
@@ -447,7 +523,6 @@ export default function CalendarMonth() {
         key={cellIndex}
         cellIndex={cellIndex}
         highlight={highlight}
-        // isSelected={isSelected}
         onCellPointerDown={handleCellPointerDown}
         onCellPointerEnter={handleCellPointerEnter}
         onCellPointerUp={handleCellPointerUp}
@@ -460,6 +535,7 @@ export default function CalendarMonth() {
   return (
     <>
       <DndContext
+        sensors={sensors}
         onDragStart={handleDragStart}
         onDragOver={handleDragOver}
         onDragEnd={handleDragEnd}
@@ -483,9 +559,6 @@ export default function CalendarMonth() {
           {Array.from(segmentsByWeek.entries()).map(([weekIdx, segments]) =>
             segments.map((seg, i) => {
               const idx = events.indexOf(seg.event);
-              // if (draggedEventIndex != null && idx === draggedEventIndex) {
-              //   return null; // hide dragged event
-              // }
               const isDimmed =
                 draggedEventIndex != null && idx !== draggedEventIndex;
 
@@ -495,6 +568,7 @@ export default function CalendarMonth() {
                   seg={seg}
                   id={`event-${idx}`}
                   dimmed={isDimmed}
+                  onClick={(e: any) => handleEventClick(e, seg.event)}
                 />
               );
             })
@@ -563,22 +637,13 @@ export default function CalendarMonth() {
             const widthPct = (pseg.endCol - pseg.startCol + 1) * (100 / 7);
             const weekIndex = pseg.weekIndex;
             const existingSegs = segmentsByWeek.get(weekIndex) ?? [];
-            //   const nextTrack =
-            //     existingSegs.length > 0
-            //       ? Math.max(...existingSegs.map((s) => s.trackIndex ?? 0)) + 1
-            //       : 0;
 
             let nextTrack = 0;
             while (true) {
               const conflict = existingSegs.some(
                 (s) =>
                   s.trackIndex === nextTrack &&
-                  !(
-                    (
-                      pseg.endCol < s.startCol || // preview ends before this segment starts
-                      pseg.startCol > s.endCol
-                    ) // preview starts after this segment ends
-                  )
+                  !(pseg.endCol < s.startCol || pseg.startCol > s.endCol)
               );
               if (!conflict) break;
               nextTrack++;
@@ -612,15 +677,11 @@ export default function CalendarMonth() {
                   overflow: "hidden",
                   whiteSpace: "nowrap",
                   textOverflow: "ellipsis",
-                  opacity: 0.8, // slight transparency to show it's a preview
+                  opacity: 0.8,
                   pointerEvents: "none",
                 }}
               >
-                {isStart && (
-                  <strong style={{ marginRight: 8, fontSize: 12 }}>
-                    {/* Optional time display for new events */}
-                  </strong>
-                )}
+                {isStart && <strong style={{ marginRight: 8, fontSize: 12 }} />}
                 <span style={{ fontSize: 13 }}>New Task</span>
               </Box>
             );
@@ -633,7 +694,22 @@ export default function CalendarMonth() {
         onClose={closeTaskModal}
         onSave={saveEventToMainEventsState}
       />
-      {console.log(events)}
+      <Popover
+        open={Boolean(popoverAnchor)}
+        anchorEl={popoverAnchor}
+        onClose={handlePopoverClose}
+        anchorOrigin={{
+          vertical: "bottom",
+          horizontal: "left",
+        }}
+      >
+        <Box sx={{ p: 2, minWidth: 200 }}>
+          <Typography variant="subtitle1" sx={{ mb: 1 }}>
+            {popoverEvent?.label || "Untitled Task"}
+          </Typography>
+          <Box sx={{ display: "flex", gap: 1 }}>edit delete</Box>
+        </Box>
+      </Popover>
     </>
   );
 }
