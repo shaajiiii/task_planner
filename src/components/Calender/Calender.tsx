@@ -4,10 +4,6 @@ import {
   DndContext,
   useDraggable,
   useDroppable,
-//   DragStartEvent,
-//   DragOverEvent,
-//   DragEndEvent,
-//   DragCancelEvent,
 } from "@dnd-kit/core";
 import type {
   DragStartEvent,
@@ -86,7 +82,6 @@ function splitEventsIntoSegments(
     segments.forEach((seg) => {
       let placed = false;
       for (let i = 0; i < tracks.length; i++) {
-        // if seg doesn't overlap any in track i, place it there
         if (
           !tracks[i].some(
             (s) =>
@@ -111,14 +106,18 @@ function splitEventsIntoSegments(
   return segmentsByWeek;
 }
 
-function DraggableEvent({ seg, id }: { seg: Segment; id: string }) {
+function DraggableEvent({
+  seg,
+  id,
+  dimmed,
+}: { seg: Segment; id: string; dimmed?: boolean }) {
   const { attributes, listeners, setNodeRef, transform } = useDraggable({ id });
 
   const leftPct = (seg.startCol - 1) * (100 / 7);
   const widthPct = (seg.endCol - seg.startCol + 1) * (100 / 7);
   const topPx =
     seg.weekIndex * WEEK_ROW_HEIGHT +
-    (seg.trackIndex ?? 0) * (TRACK_HEIGHT + TRACK_GAP);
+    (seg.trackIndex ?? 0) * (TRACK_HEIGHT + TRACK_GAP) + 30;
 
   const style: React.CSSProperties = {
     transform: transform
@@ -129,8 +128,10 @@ function DraggableEvent({ seg, id }: { seg: Segment; id: string }) {
     width: `${widthPct}%`,
     top: topPx,
     height: TRACK_HEIGHT,
-    backgroundColor: seg.event.color ?? "#1976d2",
-    color: "#fff",
+    backgroundColor: dimmed
+      ? "#e0e0e0"
+      : seg.event.color ?? "#1976d2",
+    color: dimmed ? "#757575" : "#fff",
     display: "flex",
     alignItems: "center",
     padding: "0 8px",
@@ -140,12 +141,21 @@ function DraggableEvent({ seg, id }: { seg: Segment; id: string }) {
     whiteSpace: "nowrap",
     textOverflow: "ellipsis",
     zIndex: transform ? 1000 : 2,
+    opacity: dimmed ? 0.7 : 1,
   };
 
   return (
-    <div ref={setNodeRef} {...listeners} {...attributes} style={style} title={`${seg.event.label} (${seg.event.start}-${seg.event.end})`}>
+    <div
+      ref={setNodeRef}
+      {...listeners}
+      {...attributes}
+      style={style}
+      title={`${seg.event.label} (${seg.event.start}-${seg.event.end})`}
+    >
       {seg.event.time && seg.isStart && (
-        <strong style={{ marginRight: 8, fontSize: 12 }}>{seg.event.time}</strong>
+        <strong style={{ marginRight: 8, fontSize: 12 }}>
+          {seg.event.time}
+        </strong>
       )}
       <span style={{ fontSize: 13 }}>{seg.event.label}</span>
     </div>
@@ -174,9 +184,7 @@ function DroppableCell({
         minHeight: WEEK_ROW_HEIGHT,
         boxSizing: "border-box",
         position: "relative",
-        // highlight the cell background lightly
         backgroundColor: highlight ? "rgba(25,118,210,0.08)" : undefined,
-        // subtle top indicator bar when highlighted
         "&::after": highlight
           ? {
               content: '""',
@@ -208,7 +216,7 @@ export default function CalendarMonth() {
   ]);
 
   const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const startDay = getDayOfWeek(year, month, 1); // 0=Sun
+  const startDay = getDayOfWeek(year, month, 1);
   const weeksCount = Math.ceil((startDay + daysInMonth) / 7);
   const totalCells = weeksCount * 7;
 
@@ -217,11 +225,9 @@ export default function CalendarMonth() {
     [events, daysInMonth, startDay]
   );
 
-  // drag state for UX
   const [draggedEventIndex, setDraggedEventIndex] = React.useState<number | null>(null);
   const [hoverCellIndex, setHoverCellIndex] = React.useState<number | null>(null);
 
-  // helper to compute preview segments given a proposed newStart day and duration
   function previewSegmentsFor(newStartDay: number, durationDays: number) {
     const segs: { weekIndex: number; startCol: number; endCol: number }[] = [];
     const startOffset = newStartDay + startDay - 1;
@@ -239,7 +245,6 @@ export default function CalendarMonth() {
     return segs;
   }
 
-  // DnD handlers
   function handleDragStart(event: DragStartEvent) {
     const activeId = event.active.id;
     if (typeof activeId === "string" && activeId.startsWith("event-")) {
@@ -287,7 +292,6 @@ export default function CalendarMonth() {
       return;
     }
 
-    // finalize move if active is an event
     const activeId = active.id as string;
     if (activeId.startsWith("event-")) {
       const idx = parseInt(activeId.replace("event-", ""), 10);
@@ -299,7 +303,6 @@ export default function CalendarMonth() {
               let newStart = newDay;
               let newEnd = newDay + duration - 1;
 
-              // clamp inside month
               if (newEnd > daysInMonth) {
                 newEnd = daysInMonth;
                 newStart = Math.max(1, daysInMonth - duration + 1);
@@ -320,7 +323,6 @@ export default function CalendarMonth() {
     setDraggedEventIndex(null);
   }
 
-  // compute preview segments if dragging an event and hovering a cell
   const previewSegments = React.useMemo(() => {
     if (draggedEventIndex == null || hoverCellIndex == null) return [];
     const ev = events[draggedEventIndex];
@@ -331,7 +333,6 @@ export default function CalendarMonth() {
     return previewSegmentsFor(newDay, duration);
   }, [draggedEventIndex, hoverCellIndex, events, startDay, daysInMonth]);
 
-  // render month grid cells with highlight flag if hoverCellIndex matches
   const allCells = Array.from({ length: totalCells }).map((_, cellIndex) => {
     const dayNum = cellIndex - startDay + 1;
     const visible = dayNum >= 1 && dayNum <= daysInMonth;
@@ -363,30 +364,32 @@ export default function CalendarMonth() {
       >
         {allCells}
 
-        {/* Render existing events — while dragging, hide the original event being dragged */}
+        {/* Render existing events — while dragging, dim the others */}
         {Array.from(segmentsByWeek.entries()).map(([weekIdx, segments]) =>
           segments.map((seg, i) => {
             const idx = events.indexOf(seg.event);
             if (draggedEventIndex != null && idx === draggedEventIndex) {
-              // skip rendering original while dragging; preview will show
-              return null;
+              return null; // hide dragged event
             }
+            const isDimmed =
+              draggedEventIndex != null && idx !== draggedEventIndex;
+
             return (
               <DraggableEvent
                 key={`${weekIdx}-${i}`}
                 seg={seg}
                 id={`event-${idx}`}
+                dimmed={isDimmed}
               />
             );
           })
         )}
 
-        {/* Render preview segments while dragging (semi-transparent) */}
+        {/* Render preview segments */}
         {previewSegments.map((pseg, i) => {
           const leftPct = (pseg.startCol - 1) * (100 / 7);
           const widthPct = (pseg.endCol - pseg.startCol + 1) * (100 / 7);
           const weekIndex = pseg.weekIndex;
-          // place preview below existing tracks in that week for clarity
           const existingSegs = segmentsByWeek.get(weekIndex) ?? [];
           const nextTrack =
             existingSegs.length > 0
