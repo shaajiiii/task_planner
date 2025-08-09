@@ -165,7 +165,7 @@ function DroppableCell({
   cellIndex,
   children,
   highlight,
-  isSelected,
+//   isSelected,
   onCellPointerDown,
   onCellPointerEnter,
   onCellPointerUp,
@@ -173,7 +173,7 @@ function DroppableCell({
   cellIndex: number;
   children?: React.ReactNode;
   highlight?: boolean;
-  isSelected?: boolean;
+//   isSelected?: boolean;
   onCellPointerDown?: (cellIndex: number) => void;
   onCellPointerEnter?: (cellIndex: number) => void;
   onCellPointerUp?: (cellIndex: number) => void;
@@ -191,7 +191,7 @@ function DroppableCell({
         minHeight: WEEK_ROW_HEIGHT,
         boxSizing: "border-box",
         position: "relative",
-        backgroundColor: isSelected ? "rgba(25,118,210,0.14)" : undefined,
+        // backgroundColor: highlight ? "rgba(25,118,210,0.14)" : undefined,
 
         "&::after": highlight
           ? {
@@ -424,17 +424,13 @@ export default function CalendarMonth() {
     const dayNum = cellIndex - startDay + 1;
     const visible = dayNum >= 1 && dayNum <= daysInMonth;
     const highlight = hoverCellIndex === cellIndex;
-    // For drag-to-create selection
-    const isSelected =
-      isDraggingNew &&
-      cellIndex >= Math.min(selectStartCell!, selectEndCell!) &&
-      cellIndex <= Math.max(selectStartCell!, selectEndCell!);
+  
     return (
       <DroppableCell
         key={cellIndex}
         cellIndex={cellIndex}
         highlight={highlight}
-        isSelected={isSelected}
+        // isSelected={isSelected}
         onCellPointerDown={handleCellPointerDown}
         onCellPointerEnter={handleCellPointerEnter}
         onCellPointerUp={handleCellPointerUp}
@@ -491,13 +487,26 @@ export default function CalendarMonth() {
           const widthPct = (pseg.endCol - pseg.startCol + 1) * (100 / 7);
           const weekIndex = pseg.weekIndex;
           const existingSegs = segmentsByWeek.get(weekIndex) ?? [];
-          const nextTrack =
-            existingSegs.length > 0
-              ? Math.max(...existingSegs.map((s) => s.trackIndex ?? 0)) + 1
-              : 0;
+
+          let nextTrack = 0;
+          while (true) {
+            const conflict = existingSegs.some(
+              (s) =>
+                s.trackIndex === nextTrack &&
+                !(
+                  (
+                    pseg.endCol < s.startCol || // preview ends before this segment starts
+                    pseg.startCol > s.endCol
+                  ) // preview starts after this segment ends
+                )
+            );
+            if (!conflict) break;
+            nextTrack++;
+          }
           const topPx =
             weekIndex * WEEK_ROW_HEIGHT +
-            nextTrack * (TRACK_HEIGHT + TRACK_GAP);
+            nextTrack * (TRACK_HEIGHT + TRACK_GAP) +
+            TOP_OFFSET__FOR_TASKS;
           return (
             <Box
               key={`preview-${i}`}
@@ -529,7 +538,7 @@ export default function CalendarMonth() {
           );
         })}
 
-        {/* Render preview for drag-to-create */}
+        {/*  Render preview for drag-to-create */}
         {selectPreview.map((pseg, i) => {
           const leftPct = (pseg.startCol - 1) * (100 / 7);
           const widthPct = (pseg.endCol - pseg.startCol + 1) * (100 / 7);
