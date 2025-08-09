@@ -165,7 +165,7 @@ function DroppableCell({
   cellIndex,
   children,
   highlight,
-//   isSelected,
+  //   isSelected,
   onCellPointerDown,
   onCellPointerEnter,
   onCellPointerUp,
@@ -173,7 +173,7 @@ function DroppableCell({
   cellIndex: number;
   children?: React.ReactNode;
   highlight?: boolean;
-//   isSelected?: boolean;
+  //   isSelected?: boolean;
   onCellPointerDown?: (cellIndex: number) => void;
   onCellPointerEnter?: (cellIndex: number) => void;
   onCellPointerUp?: (cellIndex: number) => void;
@@ -424,7 +424,7 @@ export default function CalendarMonth() {
     const dayNum = cellIndex - startDay + 1;
     const visible = dayNum >= 1 && dayNum <= daysInMonth;
     const highlight = hoverCellIndex === cellIndex;
-  
+
     return (
       <DroppableCell
         key={cellIndex}
@@ -456,6 +456,7 @@ export default function CalendarMonth() {
           borderTop: "1px solid rgba(0,0,0,0.06)",
           borderLeft: "1px solid rgba(0,0,0,0.06)",
           minWidth: 700,
+          userSelect: "none",
         }}
       >
         {allCells}
