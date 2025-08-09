@@ -7,6 +7,7 @@ import type {
   DragEndEvent,
   DragCancelEvent,
 } from "@dnd-kit/core";
+import TaskModal from "../TaskModal";
 
 type CalendarEvent = {
   start: number;
@@ -441,172 +442,183 @@ export default function CalendarMonth() {
   });
 
   return (
-    <DndContext
-      onDragStart={handleDragStart}
-      onDragOver={handleDragOver}
-      onDragEnd={handleDragEnd}
-      onDragCancel={handleDragCancel}
-    >
-      <Box
-        sx={{
-          display: "grid",
-          gridTemplateColumns: "repeat(7, 1fr)",
-          gridTemplateRows: `repeat(${weeksCount}, ${WEEK_ROW_HEIGHT}px)`,
-          position: "relative",
-          borderTop: "1px solid rgba(0,0,0,0.06)",
-          borderLeft: "1px solid rgba(0,0,0,0.06)",
-          minWidth: 700,
-          userSelect: "none",
-        }}
+    <>
+      <DndContext
+        onDragStart={handleDragStart}
+        onDragOver={handleDragOver}
+        onDragEnd={handleDragEnd}
+        onDragCancel={handleDragCancel}
       >
-        {allCells}
+        <Box
+          sx={{
+            display: "grid",
+            gridTemplateColumns: "repeat(7, 1fr)",
+            gridTemplateRows: `repeat(${weeksCount}, ${WEEK_ROW_HEIGHT}px)`,
+            position: "relative",
+            borderTop: "1px solid rgba(0,0,0,0.06)",
+            borderLeft: "1px solid rgba(0,0,0,0.06)",
+            minWidth: 700,
+            userSelect: "none",
+          }}
+        >
+          {allCells}
 
-        {/* Render existing events — while dragging, dim the others */}
-        {Array.from(segmentsByWeek.entries()).map(([weekIdx, segments]) =>
-          segments.map((seg, i) => {
-            const idx = events.indexOf(seg.event);
-            if (draggedEventIndex != null && idx === draggedEventIndex) {
-              return null; // hide dragged event
+          {/* Render existing events — while dragging, dim the others */}
+          {Array.from(segmentsByWeek.entries()).map(([weekIdx, segments]) =>
+            segments.map((seg, i) => {
+              const idx = events.indexOf(seg.event);
+              // if (draggedEventIndex != null && idx === draggedEventIndex) {
+              //   return null; // hide dragged event
+              // }
+              const isDimmed =
+                draggedEventIndex != null && idx !== draggedEventIndex;
+
+              return (
+                <DraggableEvent
+                  key={`${weekIdx}-${i}`}
+                  seg={seg}
+                  id={`event-${idx}`}
+                  dimmed={isDimmed}
+                />
+              );
+            })
+          )}
+
+          {/* Render preview segments for drag-to-move */}
+          {previewSegments.map((pseg, i) => {
+            const leftPct = (pseg.startCol - 1) * (100 / 7);
+            const widthPct = (pseg.endCol - pseg.startCol + 1) * (100 / 7);
+            const weekIndex = pseg.weekIndex;
+            const existingSegs = segmentsByWeek.get(weekIndex) ?? [];
+
+            let nextTrack = 0;
+            while (true) {
+              const conflict = existingSegs.some(
+                (s) =>
+                  s.trackIndex === nextTrack &&
+                  !(
+                    (
+                      pseg.endCol < s.startCol || // preview ends before this segment starts
+                      pseg.startCol > s.endCol
+                    ) // preview starts after this segment ends
+                  )
+              );
+              if (!conflict) break;
+              nextTrack++;
             }
-            const isDimmed =
-              draggedEventIndex != null && idx !== draggedEventIndex;
+            const topPx =
+              weekIndex * WEEK_ROW_HEIGHT +
+              nextTrack * (TRACK_HEIGHT + TRACK_GAP) +
+              TOP_OFFSET__FOR_TASKS;
+            return (
+              <Box
+                key={`preview-${i}`}
+                sx={{
+                  position: "absolute",
+                  left: `${leftPct}%`,
+                  width: `${widthPct}%`,
+                  top: topPx,
+                  height: TRACK_HEIGHT,
+                  borderRadius: 6,
+                  backgroundColor: "rgba(25,118,210,0.18)",
+                  border: "1px dashed rgba(25,118,210,0.6)",
+                  zIndex: 900,
+                  display: "flex",
+                  alignItems: "center",
+                  px: 1,
+                  pointerEvents: "none",
+                }}
+              >
+                <Typography
+                  variant="body2"
+                  sx={{ fontSize: 13, color: "rgba(0,0,0,0.85)" }}
+                >
+                  {draggedEventIndex != null
+                    ? events[draggedEventIndex].label
+                    : ""}
+                </Typography>
+              </Box>
+            );
+          })}
+
+          {/*  Render preview for drag-to-create */}
+          {selectPreview.map((pseg, i) => {
+            const leftPct = (pseg.startCol - 1) * (100 / 7);
+            const widthPct = (pseg.endCol - pseg.startCol + 1) * (100 / 7);
+            const weekIndex = pseg.weekIndex;
+            const existingSegs = segmentsByWeek.get(weekIndex) ?? [];
+            //   const nextTrack =
+            //     existingSegs.length > 0
+            //       ? Math.max(...existingSegs.map((s) => s.trackIndex ?? 0)) + 1
+            //       : 0;
+
+            let nextTrack = 0;
+            while (true) {
+              const conflict = existingSegs.some(
+                (s) =>
+                  s.trackIndex === nextTrack &&
+                  !(
+                    (
+                      pseg.endCol < s.startCol || // preview ends before this segment starts
+                      pseg.startCol > s.endCol
+                    ) // preview starts after this segment ends
+                  )
+              );
+              if (!conflict) break;
+              nextTrack++;
+            }
+            const topPx =
+              weekIndex * WEEK_ROW_HEIGHT +
+              nextTrack * (TRACK_HEIGHT + TRACK_GAP) +
+              TOP_OFFSET__FOR_TASKS;
+
+            const isStart =
+              pseg.startCol ===
+              Math.min(...selectPreview.map((s) => s.startCol));
+            const eventColor = " #1976d2";
 
             return (
-              <DraggableEvent
-                key={`${weekIdx}-${i}`}
-                seg={seg}
-                id={`event-${idx}`}
-                dimmed={isDimmed}
-              />
-            );
-          })
-        )}
-
-        {/* Render preview segments for drag-to-move */}
-        {previewSegments.map((pseg, i) => {
-          const leftPct = (pseg.startCol - 1) * (100 / 7);
-          const widthPct = (pseg.endCol - pseg.startCol + 1) * (100 / 7);
-          const weekIndex = pseg.weekIndex;
-          const existingSegs = segmentsByWeek.get(weekIndex) ?? [];
-
-          let nextTrack = 0;
-          while (true) {
-            const conflict = existingSegs.some(
-              (s) =>
-                s.trackIndex === nextTrack &&
-                !(
-                  (
-                    pseg.endCol < s.startCol || // preview ends before this segment starts
-                    pseg.startCol > s.endCol
-                  ) // preview starts after this segment ends
-                )
-            );
-            if (!conflict) break;
-            nextTrack++;
-          }
-          const topPx =
-            weekIndex * WEEK_ROW_HEIGHT +
-            nextTrack * (TRACK_HEIGHT + TRACK_GAP) +
-            TOP_OFFSET__FOR_TASKS;
-          return (
-            <Box
-              key={`preview-${i}`}
-              sx={{
-                position: "absolute",
-                left: `${leftPct}%`,
-                width: `${widthPct}%`,
-                top: topPx,
-                height: TRACK_HEIGHT,
-                borderRadius: 6,
-                backgroundColor: "rgba(25,118,210,0.18)",
-                border: "1px dashed rgba(25,118,210,0.6)",
-                zIndex: 900,
-                display: "flex",
-                alignItems: "center",
-                px: 1,
-                pointerEvents: "none",
-              }}
-            >
-              <Typography
-                variant="body2"
-                sx={{ fontSize: 13, color: "rgba(0,0,0,0.85)" }}
+              <Box
+                key={`select-preview-${i}`}
+                sx={{
+                  position: "absolute",
+                  left: `${leftPct}%`,
+                  width: `${widthPct}%`,
+                  top: topPx,
+                  height: TRACK_HEIGHT,
+                  borderRadius: 6,
+                  backgroundColor: eventColor,
+                  color: "#fff",
+                  zIndex: 900,
+                  display: "flex",
+                  alignItems: "center",
+                  px: 1,
+                  overflow: "hidden",
+                  whiteSpace: "nowrap",
+                  textOverflow: "ellipsis",
+                  opacity: 0.8, // slight transparency to show it's a preview
+                  pointerEvents: "none",
+                }}
               >
-                {draggedEventIndex != null
-                  ? events[draggedEventIndex].label
-                  : ""}
-              </Typography>
-            </Box>
-          );
-        })}
-
-        {/*  Render preview for drag-to-create */}
-        {selectPreview.map((pseg, i) => {
-          const leftPct = (pseg.startCol - 1) * (100 / 7);
-          const widthPct = (pseg.endCol - pseg.startCol + 1) * (100 / 7);
-          const weekIndex = pseg.weekIndex;
-          const existingSegs = segmentsByWeek.get(weekIndex) ?? [];
-          //   const nextTrack =
-          //     existingSegs.length > 0
-          //       ? Math.max(...existingSegs.map((s) => s.trackIndex ?? 0)) + 1
-          //       : 0;
-
-          let nextTrack = 0;
-          while (true) {
-            const conflict = existingSegs.some(
-              (s) =>
-                s.trackIndex === nextTrack &&
-                !(
-                  (
-                    pseg.endCol < s.startCol || // preview ends before this segment starts
-                    pseg.startCol > s.endCol
-                  ) // preview starts after this segment ends
-                )
+                {isStart && (
+                  <strong style={{ marginRight: 8, fontSize: 12 }}>
+                    {/* Optional time display for new events */}
+                  </strong>
+                )}
+                <span style={{ fontSize: 13 }}>New Task</span>
+              </Box>
             );
-            if (!conflict) break;
-            nextTrack++;
-          }
-          const topPx =
-            weekIndex * WEEK_ROW_HEIGHT +
-            nextTrack * (TRACK_HEIGHT + TRACK_GAP) +
-            TOP_OFFSET__FOR_TASKS;
-
-          const isStart =
-            pseg.startCol === Math.min(...selectPreview.map((s) => s.startCol));
-          const eventColor = " #1976d2";
-
-          return (
-            <Box
-              key={`select-preview-${i}`}
-              sx={{
-                position: "absolute",
-                left: `${leftPct}%`,
-                width: `${widthPct}%`,
-                top: topPx,
-                height: TRACK_HEIGHT,
-                borderRadius: 6,
-                backgroundColor: eventColor,
-                color: "#fff",
-                zIndex: 900,
-                display: "flex",
-                alignItems: "center",
-                px: 1,
-                overflow: "hidden",
-                whiteSpace: "nowrap",
-                textOverflow: "ellipsis",
-                opacity: 0.8, // slight transparency to show it's a preview
-                pointerEvents: "none",
-              }}
-            >
-              {isStart && (
-                <strong style={{ marginRight: 8, fontSize: 12 }}>
-                  {/* Optional time display for new events */}
-                </strong>
-              )}
-              <span style={{ fontSize: 13 }}>New Task</span>
-            </Box>
-          );
-        })}
-      </Box>
-    </DndContext>
+          })}
+        </Box>
+      </DndContext>{" "}
+      {/* <TaskModal />{" "} */}
+      <TaskModal
+        open={true}
+        // initialTitle={modalTask?.title}
+        // initialStatus={modalTask?.status}
+        onClose={() => {}}
+        onSave={() => {}}
+      />
+    </>
   );
 }
