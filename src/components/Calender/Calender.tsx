@@ -1,286 +1,425 @@
-// CalendarMonth.tsx
-import React, { useMemo, type FC } from "react";
+import * as React from "react";
 import { Box, Typography } from "@mui/material";
+import {
+  DndContext,
+  useDraggable,
+  useDroppable,
+//   DragStartEvent,
+//   DragOverEvent,
+//   DragEndEvent,
+//   DragCancelEvent,
+} from "@dnd-kit/core";
+import type {
+  DragStartEvent,
+  DragOverEvent,
+  DragEndEvent,
+  DragCancelEvent,
+} from "@dnd-kit/core";
 
 type CalendarEvent = {
-  start: number; // day of month (1..)
-  end: number; // day of month (1..)
+  start: number;
+  end: number;
   label: string;
   color?: string;
   time?: string;
 };
 
 type Segment = {
-  weekIndex: number;
-  startCol: number; // 1..7
-  endCol: number; // 1..7 (inclusive)
   event: CalendarEvent;
   isStart: boolean;
   isEnd: boolean;
-  trackIndex?: number; // filled after track assignment
+  startCol: number;
+  endCol: number;
+  trackIndex?: number;
+  weekIndex: number;
 };
 
-const daysOfWeek = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
+const TRACK_HEIGHT = 20;
+const TRACK_GAP = 6;
+const WEEK_ROW_HEIGHT = 80;
 
-/**
- * Example inputs - replace with dynamic date logic as needed
- */
-const daysInMonth = 31;
-const startDay = 1; // 0 = Sunday, 1 = Monday ... (the weekday index of day 1 of the month)
+function getDayOfWeek(year: number, month: number, day: number): number {
+  return new Date(year, month, day).getDay();
+}
 
-const events: CalendarEvent[] = [
-  { start: 1, end: 3, label: "Short Trip", color: "#1976d2", time: "4:15pm" },
-  { start: 5, end: 10, label: "Workshop", color: "#0b7f08" },
-  { start: 3, end: 10, label: "Workshop", color: "#525252ff" },
-  { start: 28, end: 31, label: "Quarter End", color: "#f57c00" },
-];
+function splitEventsIntoSegments(
+  events: CalendarEvent[],
+  daysInMonth: number,
+  startDay: number
+): Map<number, Segment[]> {
+  const segmentsByWeek = new Map<number, Segment[]>();
 
-const CalendarMonth: FC = () => {
-// export default function CalendarMonth(): JSX.Element {
-  // total cells = weeks * 7
-  const totalCells = Math.ceil((startDay + daysInMonth) / 7) * 7;
-  const weeksCount = totalCells / 7;
+  events.forEach((event) => {
+    const start = event.start;
+    const end = event.end;
+    const startOffset = start + startDay - 1;
+    const endOffset = end + startDay - 1;
+    let currentStart = startOffset;
 
-  /**
-   * Convert events -> weekly segments. Then assign tracks per week so segments that overlap are stacked.
-   */
-  const segmentsByWeek = useMemo(() => {
-    const segsMap = new Map<number, Segment[]>();
+    while (currentStart <= endOffset) {
+      const currentWeek = Math.floor(currentStart / 7);
+      const weekStartCol = currentWeek * 7;
+      const weekEndCol = weekStartCol + 6;
+      const segmentStartCol = currentStart - weekStartCol + 1;
+      const segmentEndCol =
+        Math.min(endOffset, weekEndCol) - weekStartCol + 1;
 
-    // Helper to push segment into map
-    const pushSeg = (s: Segment) => {
-      const arr = segsMap.get(s.weekIndex) ?? [];
-      arr.push(s);
-      segsMap.set(s.weekIndex, arr);
-    };
+      const segment: Segment = {
+        event,
+        isStart: currentStart === startOffset,
+        isEnd: segmentEndCol + weekStartCol === endOffset,
+        startCol: segmentStartCol,
+        endCol: segmentEndCol,
+        weekIndex: currentWeek,
+      };
 
-    // Convert each event to one or more weekly segments
-    events.forEach((ev) => {
-      // convert day -> absolute cell index (0-based) in the month grid
-      // cellIndex for day d = startDay + (d - 1)
-      const startCell = startDay + ev.start - 1;
-      const endCell = startDay + ev.end - 1;
+      if (!segmentsByWeek.has(currentWeek)) segmentsByWeek.set(currentWeek, []);
+      segmentsByWeek.get(currentWeek)!.push(segment);
 
-      let cur = startCell;
-      while (cur <= endCell) {
-        const weekIndex = Math.floor(cur / 7);
-        const weekLastCell = weekIndex * 7 + 6;
+      currentStart = weekEndCol + 1;
+    }
+  });
 
-        const segStartCell = cur;
-        const segEndCell = Math.min(endCell, weekLastCell);
-
-        const startCol = (segStartCell % 7) + 1; // 1..7
-        const endCol = (segEndCell % 7) + 1; // 1..7 inclusive
-
-        pushSeg({
-          weekIndex,
-          startCol,
-          endCol,
-          event: ev,
-          isStart: segStartCell === startCell,
-          isEnd: segEndCell === endCell,
-        });
-
-        cur = segEndCell + 1;
+  // Assign tracks so segments in same week don't overlap
+  for (const [, segments] of segmentsByWeek.entries()) {
+    const tracks: Segment[][] = [];
+    segments.forEach((seg) => {
+      let placed = false;
+      for (let i = 0; i < tracks.length; i++) {
+        // if seg doesn't overlap any in track i, place it there
+        if (
+          !tracks[i].some(
+            (s) =>
+              (seg.startCol >= s.startCol && seg.startCol <= s.endCol) ||
+              (seg.endCol >= s.startCol && seg.endCol <= s.endCol) ||
+              (seg.startCol <= s.startCol && seg.endCol >= s.endCol)
+          )
+        ) {
+          seg.trackIndex = i;
+          tracks[i].push(seg);
+          placed = true;
+          break;
+        }
+      }
+      if (!placed) {
+        seg.trackIndex = tracks.length;
+        tracks.push([seg]);
       }
     });
+  }
 
-    // Assign vertical tracks per week so overlapping segments stack
-    for (const [weekIndex, segs] of segsMap) {
-      // sort by startCol ascending, longer first maybe, stable
-      segs.sort((a, b) => a.startCol - b.startCol || b.endCol - a.endCol);
+  return segmentsByWeek;
+}
 
-      const tracks: Segment[][] = [];
+function DraggableEvent({ seg, id }: { seg: Segment; id: string }) {
+  const { attributes, listeners, setNodeRef, transform } = useDraggable({ id });
 
-      segs.forEach((seg) => {
-        let placed = false;
-        for (let t = 0; t < tracks.length; t++) {
-          const last = tracks[t][tracks[t].length - 1];
-          // no overlap if last.endCol < seg.startCol
-          if (last.endCol < seg.startCol) {
-            seg.trackIndex = t;
-            tracks[t].push(seg);
-            placed = true;
-            break;
-          }
-        }
-        if (!placed) {
-          seg.trackIndex = tracks.length;
-          tracks.push([seg]);
-        }
-      });
+  const leftPct = (seg.startCol - 1) * (100 / 7);
+  const widthPct = (seg.endCol - seg.startCol + 1) * (100 / 7);
+  const topPx =
+    seg.weekIndex * WEEK_ROW_HEIGHT +
+    (seg.trackIndex ?? 0) * (TRACK_HEIGHT + TRACK_GAP);
 
-      // replace with updated segs (trackIndex set)
-      segsMap.set(weekIndex, segs);
-    }
+  const style: React.CSSProperties = {
+    transform: transform
+      ? `translate3d(${transform.x}px, ${transform.y}px, 0)`
+      : undefined,
+    position: "absolute",
+    left: `${leftPct}%`,
+    width: `${widthPct}%`,
+    top: topPx,
+    height: TRACK_HEIGHT,
+    backgroundColor: seg.event.color ?? "#1976d2",
+    color: "#fff",
+    display: "flex",
+    alignItems: "center",
+    padding: "0 8px",
+    borderRadius: 6,
+    cursor: "grab",
+    overflow: "hidden",
+    whiteSpace: "nowrap",
+    textOverflow: "ellipsis",
+    zIndex: transform ? 1000 : 2,
+  };
 
-    return segsMap; // Map<weekIndex, Segment[]>
-  }, [events]);
-
-  // Styling constants for layout
-  const WEEK_ROW_HEIGHT = 110; // px - height of each week row (days + room for events)
-  const DAY_NUMBER_HEIGHT = 22; // top area reserved for the day number
-  const TRACK_HEIGHT = 34; // px height per event track
-  const TRACK_GAP = 6; // px gap between tracks
-
-  // Render weeks (each week is position:relative container)
   return (
-    <Box sx={{ p: 3 }}>
-      {/* week headers */}
-      <Box
-        sx={{
-          display: "grid",
-          gridTemplateColumns: "repeat(7, 1fr)",
-          mb: 1.5,
-          px: 1,
-        }}
-      >
-        {daysOfWeek.map((d) => (
-          <Typography
-            key={d}
-            sx={{ fontWeight: 700, textAlign: "center", letterSpacing: 0.6 }}
-          >
-            {d}
-          </Typography>
-        ))}
-      </Box>
+    <div ref={setNodeRef} {...listeners} {...attributes} style={style} title={`${seg.event.label} (${seg.event.start}-${seg.event.end})`}>
+      {seg.event.time && seg.isStart && (
+        <strong style={{ marginRight: 8, fontSize: 12 }}>{seg.event.time}</strong>
+      )}
+      <span style={{ fontSize: 13 }}>{seg.event.label}</span>
+    </div>
+  );
+}
 
-      {/* Weeks column */}
-      <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
-        {Array.from({ length: weeksCount }).map((_, weekIdx) => {
-          // build day cells for this week
-          const dayCells = Array.from({ length: 7 }).map((__, colIdx) => {
-            const cellIndex = weekIdx * 7 + colIdx;
-            const dayNum = cellIndex - startDay + 1;
-            const visible = dayNum >= 1 && dayNum <= daysInMonth;
-            return { dayNum: visible ? dayNum : null, cellIndex };
-          });
+function DroppableCell({
+  cellIndex,
+  children,
+  highlight,
+}: {
+  cellIndex: number;
+  children?: React.ReactNode;
+  highlight?: boolean;
+}) {
+  const { setNodeRef } = useDroppable({ id: `cell-${cellIndex}` });
 
-          // segments for this week (may be undefined)
-          const segsThisWeek = segmentsByWeek.get(weekIdx) ?? [];
-          const maxTracks = segsThisWeek.length
-            ? Math.max(...segsThisWeek.map((s) => s.trackIndex ?? 0)) + 1
-            : 0;
-
-          // compute overlay height for tracks
-          const overlayHeight = maxTracks
-            ? maxTracks * TRACK_HEIGHT +
-              Math.max(0, (maxTracks - 1) * TRACK_GAP)
-            : 0;
-
-          return (
-            <Box
-              key={weekIdx}
-              sx={{
-                display: "grid",
-                gridTemplateColumns: "repeat(7, 1fr)",
-                minHeight: WEEK_ROW_HEIGHT,
-                borderTop: "1px solid rgba(0,0,0,0.06)",
-                borderLeft: "1px solid rgba(0,0,0,0.06)",
-                position: "relative",
-                px: 1,
-              }}
-            >
-              {/* day cells */}
-              {dayCells.map((cell, ci) => (
-                <Box
-                  key={ci}
-                  sx={{
-                    borderRight: "1px solid rgba(0,0,0,0.06)",
-                    borderBottom: "1px solid rgba(0,0,0,0.06)",
-                    px: 1,
-                    pt: 1,
-                    boxSizing: "border-box",
-                    // reserve space at top for day number
-                    minHeight: WEEK_ROW_HEIGHT,
-                  }}
-                >
-                  <Typography
-                    variant="body2"
-                    sx={{
-                      fontSize: 13,
-                      color: "#222",
-                      lineHeight: "20px",
-                      height: DAY_NUMBER_HEIGHT,
-                    }}
-                  >
-                    {cell.dayNum ?? ""}
-                  </Typography>
-                </Box>
-              ))}
-
-              {/* events overlay for this week */}
-              {segsThisWeek.length > 0 && (
-                <Box
-                  sx={{
-                    position: "absolute",
-                    left: 0,
-                    right: 0,
-                    // place overlay just below day numbers (so events don't cover the number)
-                    top: DAY_NUMBER_HEIGHT + 6,
-                    height: overlayHeight,
-                    pointerEvents: "auto",
-                    zIndex: 5,
-                  }}
-                >
-                  {/* render each segment */}
-                  {segsThisWeek.map((seg, i) => {
-                    const track = seg.trackIndex ?? 0;
-                    const leftPercent = ((seg.startCol - 1) / 7) * 100;
-                    const widthPercent =
-                      ((seg.endCol - seg.startCol + 1) / 7) * 100;
-                    const topPx = track * (TRACK_HEIGHT + TRACK_GAP);
-
-                    // rounded corners only at actual start/end of event (not when segment continues)
-                    const borderTopLeftRadius = seg.isStart ? 8 : 2;
-                    const borderBottomLeftRadius = seg.isStart ? 8 : 2;
-                    const borderTopRightRadius = seg.isEnd ? 8 : 2;
-                    const borderBottomRightRadius = seg.isEnd ? 8 : 2;
-
-                    return (
-                      <Box
-                        key={i}
-                        sx={{
-                          position: "absolute",
-                          left: `${leftPercent}%`,
-                          width: `${widthPercent}%`,
-                          top: topPx,
-                          height: TRACK_HEIGHT,
-                          backgroundColor: seg.event.color ?? "#1976d2",
-                          color: "#fff",
-                          display: "flex",
-                          alignItems: "center",
-                          px: 1.25,
-                          boxSizing: "border-box",
-                          fontSize: 13,
-                          whiteSpace: "nowrap",
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          borderTopLeftRadius,
-                          borderBottomLeftRadius,
-                          borderTopRightRadius,
-                          borderBottomRightRadius,
-                          boxShadow: "0 1px 0 rgba(0,0,0,0.06) inset",
-                        }}
-                        title={`${seg.event.label} (${seg.event.start}→${seg.event.end})`}
-                      >
-                        {seg.event.time && seg.isStart && (
-                          <strong style={{ marginRight: 8, fontSize: 12 }}>
-                            {seg.event.time}
-                          </strong>
-                        )}
-                        <span style={{ fontSize: 13 }}>{seg.event.label}</span>
-                      </Box>
-                    );
-                  })}
-                </Box>
-              )}
-            </Box>
-          );
-        })}
-      </Box>
+  return (
+    <Box
+      ref={setNodeRef}
+      sx={{
+        borderRight: "1px solid rgba(0,0,0,0.06)",
+        borderBottom: "1px solid rgba(0,0,0,0.06)",
+        px: 1,
+        pt: 1,
+        minHeight: WEEK_ROW_HEIGHT,
+        boxSizing: "border-box",
+        position: "relative",
+        // highlight the cell background lightly
+        backgroundColor: highlight ? "rgba(25,118,210,0.08)" : undefined,
+        // subtle top indicator bar when highlighted
+        "&::after": highlight
+          ? {
+              content: '""',
+              position: "absolute",
+              left: 4,
+              right: 4,
+              top: 6,
+              height: 4,
+              borderRadius: 2,
+              backgroundColor: "rgba(25,118,210,0.9)",
+            }
+          : undefined,
+      }}
+    >
+      {children}
     </Box>
   );
 }
 
-export default CalendarMonth
+export default function CalendarMonth() {
+  const year = 2024;
+  const month = 9; // October (0-based)
+
+  const [events, setEvents] = React.useState<CalendarEvent[]>([
+    { start: 1, end: 3, label: "Short Trip", color: "#1976d2", time: "4:15pm" },
+    { start: 5, end: 10, label: "Workshop", color: "#0b7f08" },
+    { start: 3, end: 10, label: "Conference", color: "#525252" },
+    { start: 28, end: 31, label: "Quarter End", color: "#f57c00" },
+  ]);
+
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const startDay = getDayOfWeek(year, month, 1); // 0=Sun
+  const weeksCount = Math.ceil((startDay + daysInMonth) / 7);
+  const totalCells = weeksCount * 7;
+
+  const segmentsByWeek = React.useMemo(
+    () => splitEventsIntoSegments(events, daysInMonth, startDay),
+    [events, daysInMonth, startDay]
+  );
+
+  // drag state for UX
+  const [draggedEventIndex, setDraggedEventIndex] = React.useState<number | null>(null);
+  const [hoverCellIndex, setHoverCellIndex] = React.useState<number | null>(null);
+
+  // helper to compute preview segments given a proposed newStart day and duration
+  function previewSegmentsFor(newStartDay: number, durationDays: number) {
+    const segs: { weekIndex: number; startCol: number; endCol: number }[] = [];
+    const startOffset = newStartDay + startDay - 1;
+    const endOffset = startOffset + durationDays - 1;
+    let cur = startOffset;
+    while (cur <= endOffset) {
+      const weekIndex = Math.floor(cur / 7);
+      const weekStartCol = weekIndex * 7;
+      const weekEndCol = weekStartCol + 6;
+      const segStartCol = cur - weekStartCol + 1;
+      const segEndCol = Math.min(endOffset, weekEndCol) - weekStartCol + 1;
+      segs.push({ weekIndex, startCol: segStartCol, endCol: segEndCol });
+      cur = weekEndCol + 1;
+    }
+    return segs;
+  }
+
+  // DnD handlers
+  function handleDragStart(event: DragStartEvent) {
+    const activeId = event.active.id;
+    if (typeof activeId === "string" && activeId.startsWith("event-")) {
+      const idx = parseInt(activeId.replace("event-", ""), 10);
+      if (!Number.isNaN(idx)) setDraggedEventIndex(idx);
+    } else {
+      setDraggedEventIndex(null);
+    }
+    setHoverCellIndex(null);
+  }
+
+  function handleDragOver(event: DragOverEvent) {
+    const overId = event.over?.id as string | undefined;
+    if (overId && overId.startsWith("cell-")) {
+      const newCellIndex = parseInt(overId.replace("cell-", ""), 10);
+      if (!Number.isNaN(newCellIndex)) setHoverCellIndex(newCellIndex);
+      else setHoverCellIndex(null);
+    } else {
+      setHoverCellIndex(null);
+    }
+  }
+
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    setHoverCellIndex(null);
+
+    if (!over) {
+      setDraggedEventIndex(null);
+      return;
+    }
+    const overId = over.id as string;
+    if (!overId.startsWith("cell-")) {
+      setDraggedEventIndex(null);
+      return;
+    }
+
+    const newCellIndex = parseInt(overId.replace("cell-", ""), 10);
+    if (Number.isNaN(newCellIndex)) {
+      setDraggedEventIndex(null);
+      return;
+    }
+    const newDay = newCellIndex - startDay + 1;
+    if (newDay < 1 || newDay > daysInMonth) {
+      setDraggedEventIndex(null);
+      return;
+    }
+
+    // finalize move if active is an event
+    const activeId = active.id as string;
+    if (activeId.startsWith("event-")) {
+      const idx = parseInt(activeId.replace("event-", ""), 10);
+      if (!Number.isNaN(idx)) {
+        setEvents((prev) =>
+          prev.map((ev, i) => {
+            if (i === idx) {
+              const duration = ev.end - ev.start + 1;
+              let newStart = newDay;
+              let newEnd = newDay + duration - 1;
+
+              // clamp inside month
+              if (newEnd > daysInMonth) {
+                newEnd = daysInMonth;
+                newStart = Math.max(1, daysInMonth - duration + 1);
+              }
+              return { ...ev, start: newStart, end: newEnd };
+            }
+            return ev;
+          })
+        );
+      }
+    }
+
+    setDraggedEventIndex(null);
+  }
+
+  function handleDragCancel(_: DragCancelEvent) {
+    setHoverCellIndex(null);
+    setDraggedEventIndex(null);
+  }
+
+  // compute preview segments if dragging an event and hovering a cell
+  const previewSegments = React.useMemo(() => {
+    if (draggedEventIndex == null || hoverCellIndex == null) return [];
+    const ev = events[draggedEventIndex];
+    if (!ev) return [];
+    const newDay = hoverCellIndex - startDay + 1;
+    if (newDay < 1 || newDay > daysInMonth) return [];
+    const duration = ev.end - ev.start + 1;
+    return previewSegmentsFor(newDay, duration);
+  }, [draggedEventIndex, hoverCellIndex, events, startDay, daysInMonth]);
+
+  // render month grid cells with highlight flag if hoverCellIndex matches
+  const allCells = Array.from({ length: totalCells }).map((_, cellIndex) => {
+    const dayNum = cellIndex - startDay + 1;
+    const visible = dayNum >= 1 && dayNum <= daysInMonth;
+    const highlight = hoverCellIndex === cellIndex;
+    return (
+      <DroppableCell key={cellIndex} cellIndex={cellIndex} highlight={highlight}>
+        <Typography variant="body2">{visible ? dayNum : ""}</Typography>
+      </DroppableCell>
+    );
+  });
+
+  return (
+    <DndContext
+      onDragStart={handleDragStart}
+      onDragOver={handleDragOver}
+      onDragEnd={handleDragEnd}
+      onDragCancel={handleDragCancel}
+    >
+      <Box
+        sx={{
+          display: "grid",
+          gridTemplateColumns: "repeat(7, 1fr)",
+          gridTemplateRows: `repeat(${weeksCount}, ${WEEK_ROW_HEIGHT}px)`,
+          position: "relative",
+          borderTop: "1px solid rgba(0,0,0,0.06)",
+          borderLeft: "1px solid rgba(0,0,0,0.06)",
+          minWidth: 700,
+        }}
+      >
+        {allCells}
+
+        {/* Render existing events — while dragging, hide the original event being dragged */}
+        {Array.from(segmentsByWeek.entries()).map(([weekIdx, segments]) =>
+          segments.map((seg, i) => {
+            const idx = events.indexOf(seg.event);
+            if (draggedEventIndex != null && idx === draggedEventIndex) {
+              // skip rendering original while dragging; preview will show
+              return null;
+            }
+            return (
+              <DraggableEvent
+                key={`${weekIdx}-${i}`}
+                seg={seg}
+                id={`event-${idx}`}
+              />
+            );
+          })
+        )}
+
+        {/* Render preview segments while dragging (semi-transparent) */}
+        {previewSegments.map((pseg, i) => {
+          const leftPct = (pseg.startCol - 1) * (100 / 7);
+          const widthPct = (pseg.endCol - pseg.startCol + 1) * (100 / 7);
+          const weekIndex = pseg.weekIndex;
+          // place preview below existing tracks in that week for clarity
+          const existingSegs = segmentsByWeek.get(weekIndex) ?? [];
+          const nextTrack =
+            existingSegs.length > 0
+              ? Math.max(...existingSegs.map((s) => s.trackIndex ?? 0)) + 1
+              : 0;
+          const topPx =
+            weekIndex * WEEK_ROW_HEIGHT + nextTrack * (TRACK_HEIGHT + TRACK_GAP);
+          return (
+            <Box
+              key={`preview-${i}`}
+              sx={{
+                position: "absolute",
+                left: `${leftPct}%`,
+                width: `${widthPct}%`,
+                top: topPx,
+                height: TRACK_HEIGHT,
+                borderRadius: 6,
+                backgroundColor: "rgba(25,118,210,0.18)",
+                border: "1px dashed rgba(25,118,210,0.6)",
+                zIndex: 900,
+                display: "flex",
+                alignItems: "center",
+                px: 1,
+                pointerEvents: "none",
+              }}
+            >
+              <Typography variant="body2" sx={{ fontSize: 13, color: "rgba(0,0,0,0.85)" }}>
+                {draggedEventIndex != null ? events[draggedEventIndex].label : ""}
+              </Typography>
+            </Box>
+          );
+        })}
+      </Box>
+    </DndContext>
+  );
+}
