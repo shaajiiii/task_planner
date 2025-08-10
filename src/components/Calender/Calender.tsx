@@ -705,7 +705,11 @@ export default function CalendarMonth() {
           vertical: "bottom",
           horizontal: "left",
         }}
-        sx={{ borderRadius: 3, boxShadow: 4, minWidth: 350, p: 0 }}
+        slotProps={{
+          paper: {
+            sx: { borderRadius: 3, boxShadow: 4, minWidth: 350, p: 0, mt: 1 },
+          },
+        }}
       >
         <Box sx={{ p: 2, position: "relative" }}>
           {/* Top-right action icons */}
@@ -722,7 +726,7 @@ export default function CalendarMonth() {
               <EditIcon />
             </IconButton>
             <IconButton size="small">
-              <DeleteIcon />
+              <DeleteIcon onClick={handleDeleteEvent} />
             </IconButton>
             <IconButton onClick={handlePopoverClose} size="small">
               <CloseIcon />

@@ -43,8 +43,14 @@ function TaskModal(props: TaskModalProps) {
     onSave(eventToBeSaved);
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && title?.trim()) {
+      e.preventDefault();
+      handleSave();
+    }
+  };
   return (
-    <Dialog onClose={onClose} open={open}>
+    <Dialog onClose={onClose} open={open} onKeyDown={handleKeyDown}>
       <DialogTitle>
         {selectedEvent?.label ? "Edit Task" : "Add New Task"}
       </DialogTitle>
