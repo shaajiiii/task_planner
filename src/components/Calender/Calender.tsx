@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Box, Popover, Typography } from "@mui/material";
+import { Box, Button, IconButton, Popover, Typography } from "@mui/material";
 import {
   DndContext,
   useDraggable,
@@ -16,6 +16,9 @@ import type {
   DragCancelEvent,
 } from "@dnd-kit/core";
 import TaskModal from "../TaskModal";
+import EditIcon from "@mui/icons-material/EditOutlined";
+import DeleteIcon from "@mui/icons-material/Delete";
+import CloseIcon from "@mui/icons-material/CloseRounded";
 
 type CalendarEvent = {
   start: number;
@@ -702,12 +705,44 @@ export default function CalendarMonth() {
           vertical: "bottom",
           horizontal: "left",
         }}
+        sx={{ borderRadius: 3, boxShadow: 4, minWidth: 350, p: 0 }}
       >
-        <Box sx={{ p: 2, minWidth: 200 }}>
-          <Typography variant="subtitle1" sx={{ mb: 1 }}>
-            {popoverEvent?.label || "Untitled Task"}
+        <Box sx={{ p: 2, position: "relative" }}>
+          {/* Top-right action icons */}
+          <Box
+            sx={{
+              position: "absolute",
+              top: 12,
+              right: 18,
+              display: "flex",
+              gap: 1,
+            }}
+          >
+            <IconButton size="small">
+              <EditIcon />
+            </IconButton>
+            <IconButton size="small">
+              <DeleteIcon />
+            </IconButton>
+            <IconButton onClick={handlePopoverClose} size="small">
+              <CloseIcon />
+            </IconButton>
+          </Box>
+          {/* title */}
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+            <Typography variant="h6" sx={{ fontWeight: 500 }}>
+              {popoverEvent?.label || "(No title)"}
+            </Typography>
+          </Box>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+            November 18 – 21, 2025 (show actual date?)
           </Typography>
-          <Box sx={{ display: "flex", gap: 1 }}>edit delete</Box>
+          {/* Invite via link button */}
+          <Box sx={{ my: 2 }}>
+            <Button variant="outlined" size="small" fullWidth>
+              status??
+            </Button>
+          </Box>
         </Box>
       </Popover>
     </>
