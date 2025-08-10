@@ -6,12 +6,13 @@ import DialogContent from "@mui/material/DialogContent";
 import DialogActions from "@mui/material/DialogActions";
 import TextField from "@mui/material/TextField";
 import MenuItem from "@mui/material/MenuItem";
+import { v4 as uuidv4 } from "uuid";
 
 export interface TaskModalProps {
   open: boolean;
   selectedEvent: any; // m: change to the exact type
   onClose: () => void;
-  onSave: (eventToBeSaved: any) => void; // m: change to the exact type
+  onSave: (eventToBeSaved: any, isEdit: Boolean) => void; // m: change to the exact type
 }
 
 const statusOptions = [
@@ -35,12 +36,15 @@ function TaskModal(props: TaskModalProps) {
   }, [open, selectedEvent]);
 
   const handleSave = () => {
+    const isEdit = selectedEvent?.id;
     const eventToBeSaved = {
       ...selectedEvent,
       label: title.trim(),
       status,
+      // creating id if its new task
+      ...(!isEdit ? { id: uuidv4() } : {}),
     };
-    onSave(eventToBeSaved);
+    onSave(eventToBeSaved, !!isEdit);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -57,6 +61,7 @@ function TaskModal(props: TaskModalProps) {
       <DialogContent dividers>
         <TextField
           value={title}
+          focused
           onChange={(e) => setTitle(e.target.value)}
           label="Task Title"
           fullWidth

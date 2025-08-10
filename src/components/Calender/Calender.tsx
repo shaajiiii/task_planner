@@ -21,6 +21,7 @@ import DeleteIcon from "@mui/icons-material/Delete";
 import CloseIcon from "@mui/icons-material/CloseRounded";
 
 type CalendarEvent = {
+  id?: string;
   start: number;
   end: number;
   label: string;
@@ -273,12 +274,23 @@ export default function CalendarMonth() {
 
   const closeTaskModal = React.useCallback(() => {
     setOpenTaskModal(false);
+    setSelectedEvent(null);
   }, []);
 
   const saveEventToMainEventsState = React.useCallback(
-    (newOrUpdatedEvent: CalendarEvent) => {
-      setEvents((prev) => [...prev, newOrUpdatedEvent]);
-      setOpenTaskModal(false);
+    (newOrUpdatedEvent: CalendarEvent, isEdit: Boolean) => {
+      setEvents((prev) => {
+        if (isEdit) {
+          // Edit flow → replace event with matching id
+          return prev.map((ev) =>
+            ev.id === newOrUpdatedEvent.id ? newOrUpdatedEvent : ev
+          );
+        } else {
+          // Create flow
+          return [...prev, newOrUpdatedEvent];
+        }
+      });
+      closeTaskModal();
     },
     []
   );
@@ -470,6 +482,7 @@ export default function CalendarMonth() {
         const newStart = Math.min(dayA, dayB);
         const newEnd = Math.max(dayA, dayB);
         setSelectedEvent({
+          // temporary task created here
           start: newStart,
           end: newEnd,
           label: "",
@@ -537,6 +550,10 @@ export default function CalendarMonth() {
 
   return (
     <>
+      {/* <div style={{ textAlign: "left" }}>
+        <pre>{JSON.stringify(events, null, 2)}</pre>
+        <pre>{JSON.stringify(selectedEvent, null, 2)}</pre>
+      </div> */}
       <DndContext
         sensors={sensors}
         onDragStart={handleDragStart}
@@ -722,7 +739,7 @@ export default function CalendarMonth() {
               gap: 1,
             }}
           >
-            <IconButton size="small">
+            <IconButton size="small" onClick={handleEditEvent}>
               <EditIcon />
             </IconButton>
             <IconButton size="small">
