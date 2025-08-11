@@ -1,5 +1,10 @@
 import * as React from "react";
-import { Box, Button, IconButton, Popover, Typography } from "@mui/material";
+import {
+  Box,
+  IconButton,
+  Popover,
+  Typography,
+} from "@mui/material";
 import {
   DndContext,
   useDraggable,
@@ -19,6 +24,8 @@ import TaskModal from "../TaskModal";
 import EditIcon from "@mui/icons-material/EditOutlined";
 import DeleteIcon from "@mui/icons-material/Delete";
 import CloseIcon from "@mui/icons-material/CloseRounded";
+import StatusBall from "../StatusBall";
+import StatusPill from "../StatusPill";
 
 type CalendarEvent = {
   id?: string;
@@ -201,6 +208,7 @@ function DraggableEvent({
           {seg.event.time}
         </strong>
       )}
+      <StatusBall status={seg.event.status} />
       <span style={{ fontSize: 13 }}>{seg.event.label}</span>
     </div>
   );
@@ -758,12 +766,7 @@ export default function CalendarMonth() {
           <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
             November 18 – 21, 2025 (show actual date?)
           </Typography>
-          {/* Invite via link button */}
-          <Box sx={{ my: 2 }}>
-            <Button variant="outlined" size="small" fullWidth>
-              status??
-            </Button>
-          </Box>
+          <StatusPill status={popoverEvent?.status || ""} />
         </Box>
       </Popover>
     </>

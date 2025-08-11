@@ -58,7 +58,7 @@ function TaskModal(props: TaskModalProps) {
       <DialogTitle>
         {selectedEvent?.label ? "Edit Task" : "Add New Task"}
       </DialogTitle>
-      <DialogContent dividers>
+      <DialogContent dividers sx={{maxWidth:"350px"}}>
         <TextField
           value={title}
           focused
