@@ -1,4 +1,4 @@
-import { getStatusColor, getStatusText } from "@/constants/Tasks";
+import { getStatusColor, getStatusText } from "@/utils/Tasks";
 import { Box, Chip } from "@mui/material";
 
 export interface StatusBallProps {

@@ -1,10 +1,5 @@
 import * as React from "react";
-import {
-  Box,
-  IconButton,
-  Popover,
-  Typography,
-} from "@mui/material";
+import { Box, IconButton, Popover, Typography } from "@mui/material";
 import {
   DndContext,
   useDraggable,
@@ -26,6 +21,7 @@ import DeleteIcon from "@mui/icons-material/Delete";
 import CloseIcon from "@mui/icons-material/CloseRounded";
 import StatusBall from "../StatusBall";
 import StatusPill from "../StatusPill";
+import { formatDayRange } from "@/utils/Tasks";
 
 type CalendarEvent = {
   id?: string;
@@ -321,7 +317,9 @@ export default function CalendarMonth() {
 
   const handlePopoverClose = () => {
     setPopoverAnchor(null);
-    setPopoverEvent(null);
+    setTimeout(() => {
+      setPopoverEvent(null);
+    }, 500);
   };
 
   const handleEditEvent = () => {
@@ -732,11 +730,11 @@ export default function CalendarMonth() {
         }}
         slotProps={{
           paper: {
-            sx: { borderRadius: 3, boxShadow: 4, minWidth: 350, p: 0, mt: 1 },
+            sx: { borderRadius: 3, boxShadow: 4, minWidth: 200, p: 0, mt: 1 },
           },
         }}
       >
-        <Box sx={{ p: 2, position: "relative" }}>
+        <Box sx={{ p: 2, position: "relative", pt: 6 }}>
           {/* Top-right action icons */}
           <Box
             sx={{
@@ -764,7 +762,7 @@ export default function CalendarMonth() {
             </Typography>
           </Box>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-            November 18 – 21, 2025 (show actual date?)
+            {formatDayRange(popoverEvent?.start, popoverEvent?.end)}, July 2025
           </Typography>
           <StatusPill status={popoverEvent?.status || ""} />
         </Box>
