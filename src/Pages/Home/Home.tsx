@@ -1,9 +1,14 @@
 import Calendar from "@/components/Calender";
+import CalendarSearchFilterBar from "@/components/SearchAndFilter";
+import { CalendarProvider } from "@/context/CalendarContext";
 
 export const Home = () => {
   return (
     <div>
-      <Calendar />
+      <CalendarProvider>
+        <CalendarSearchFilterBar />
+        <Calendar />
+      </CalendarProvider>
     </div>
   );
 };

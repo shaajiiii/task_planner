@@ -22,16 +22,7 @@ import CloseIcon from "@mui/icons-material/CloseRounded";
 import StatusBall from "../StatusBall";
 import StatusPill from "../StatusPill";
 import { formatDayRange } from "@/utils/Tasks";
-
-type CalendarEvent = {
-  id?: string;
-  start: number;
-  end: number;
-  label: string;
-  color?: string;
-  time?: string;
-  status: string;
-};
+import { useCalendar, type CalendarEvent } from "@/context/CalendarContext";
 
 type Segment = {
   event: CalendarEvent;
@@ -268,7 +259,8 @@ export default function CalendarMonth() {
   const year = 2024;
   const month = 9; // October (0-based)
 
-  const [events, setEvents] = React.useState<CalendarEvent[]>([]);
+  // Use calendar context instead of local state
+  const { filteredEvents, addEvent, updateEvent, deleteEvent } = useCalendar();
 
   // Modal states and functions ----------
   const [selectedEvent, setSelectedEvent] =
@@ -283,20 +275,16 @@ export default function CalendarMonth() {
 
   const saveEventToMainEventsState = React.useCallback(
     (newOrUpdatedEvent: CalendarEvent, isEdit: Boolean) => {
-      setEvents((prev) => {
-        if (isEdit) {
-          // Edit flow → replace event with matching id
-          return prev.map((ev) =>
-            ev.id === newOrUpdatedEvent.id ? newOrUpdatedEvent : ev
-          );
-        } else {
-          // Create flow
-          return [...prev, newOrUpdatedEvent];
-        }
-      });
+      if (isEdit) {
+        // Edit flow → update existing event
+        updateEvent(newOrUpdatedEvent);
+      } else {
+        // Create flow → add new event
+        addEvent(newOrUpdatedEvent);
+      }
       closeTaskModal();
     },
-    []
+    [addEvent, updateEvent, closeTaskModal]
   );
 
   // pop over states and functions ------------------------
@@ -332,7 +320,7 @@ export default function CalendarMonth() {
 
   const handleDeleteEvent = () => {
     if (popoverEvent) {
-      setEvents((prev) => prev.filter((e) => e !== popoverEvent));
+      deleteEvent(popoverEvent);
     }
     handlePopoverClose();
   };
@@ -353,8 +341,8 @@ export default function CalendarMonth() {
   const totalCells = weeksCount * 7;
 
   const segmentsByWeek = React.useMemo(
-    () => splitEventsIntoSegments(events, startDay),
-    [events, daysInMonth, startDay]
+    () => splitEventsIntoSegments(filteredEvents, startDay),
+    [filteredEvents, startDay]
   );
 
   const [draggedEventIndex, setDraggedEventIndex] = React.useState<
@@ -438,23 +426,18 @@ export default function CalendarMonth() {
     const activeId = active.id as string;
     if (activeId.startsWith("event-")) {
       const idx = parseInt(activeId.replace("event-", ""), 10);
-      if (!Number.isNaN(idx)) {
-        setEvents((prev) =>
-          prev.map((ev, i) => {
-            if (i === idx) {
-              const duration = ev.end - ev.start + 1;
-              let newStart = newDay;
-              let newEnd = newDay + duration - 1;
+      if (!Number.isNaN(idx) && filteredEvents[idx]) {
+        const eventToUpdate = filteredEvents[idx];
+        const duration = eventToUpdate.end - eventToUpdate.start + 1;
+        let newStart = newDay;
+        let newEnd = newDay + duration - 1;
 
-              if (newEnd > daysInMonth) {
-                newEnd = daysInMonth;
-                newStart = Math.max(1, daysInMonth - duration + 1);
-              }
-              return { ...ev, start: newStart, end: newEnd };
-            }
-            return ev;
-          })
-        );
+        if (newEnd > daysInMonth) {
+          newEnd = daysInMonth;
+          newStart = Math.max(1, daysInMonth - duration + 1);
+        }
+
+        updateEvent({ ...eventToUpdate, start: newStart, end: newEnd });
       }
     }
 
@@ -504,13 +487,19 @@ export default function CalendarMonth() {
 
   const previewSegments = React.useMemo(() => {
     if (draggedEventIndex == null || hoverCellIndex == null) return [];
-    const ev = events[draggedEventIndex];
+    const ev = filteredEvents[draggedEventIndex];
     if (!ev) return [];
     const newDay = hoverCellIndex - startDay + 1;
     if (newDay < 1 || newDay > daysInMonth) return [];
     const duration = ev.end - ev.start + 1;
     return previewSegmentsFor(newDay, duration);
-  }, [draggedEventIndex, hoverCellIndex, events, startDay, daysInMonth]);
+  }, [
+    draggedEventIndex,
+    hoverCellIndex,
+    filteredEvents,
+    startDay,
+    daysInMonth,
+  ]);
 
   // For drag-to-create: "ghost" preview
   const selectPreview = React.useMemo(() => {
@@ -556,10 +545,6 @@ export default function CalendarMonth() {
 
   return (
     <>
-      {/* <div style={{ textAlign: "left" }}>
-        <pre>{JSON.stringify(events, null, 2)}</pre>
-        <pre>{JSON.stringify(selectedEvent, null, 2)}</pre>
-      </div> */}
       <DndContext
         sensors={sensors}
         onDragStart={handleDragStart}
@@ -584,7 +569,7 @@ export default function CalendarMonth() {
           {/* Render existing events — while dragging, dim the others */}
           {Array.from(segmentsByWeek.entries()).map(([weekIdx, segments]) =>
             segments.map((seg, i) => {
-              const idx = events.indexOf(seg.event);
+              const idx = filteredEvents.indexOf(seg.event);
               const isDimmed =
                 draggedEventIndex != null && idx !== draggedEventIndex;
 
@@ -650,7 +635,7 @@ export default function CalendarMonth() {
                   sx={{ fontSize: 13, color: "rgba(0,0,0,0.85)" }}
                 >
                   {draggedEventIndex != null
-                    ? events[draggedEventIndex].label
+                    ? filteredEvents[draggedEventIndex].label
                     : ""}
                 </Typography>
               </Box>
@@ -748,8 +733,8 @@ export default function CalendarMonth() {
             <IconButton size="small" onClick={handleEditEvent}>
               <EditIcon />
             </IconButton>
-            <IconButton size="small">
-              <DeleteIcon onClick={handleDeleteEvent} />
+            <IconButton size="small" onClick={handleDeleteEvent}>
+              <DeleteIcon />
             </IconButton>
             <IconButton onClick={handlePopoverClose} size="small">
               <CloseIcon />
