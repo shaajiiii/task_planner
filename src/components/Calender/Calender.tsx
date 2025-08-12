@@ -543,8 +543,28 @@ export default function CalendarMonth() {
     );
   });
 
+  // move to constants later
+  const daysOfWeek = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
   return (
     <>
+      {/* day labels */}
+      <Box
+        sx={{
+          display: "grid",
+          gridTemplateColumns: "repeat(7, 1fr)",
+          mb: 1.5,
+          px: 1,
+        }}
+      >
+        {daysOfWeek.map((d) => (
+          <Typography
+            key={d}
+            sx={{ fontWeight: 700, textAlign: "center", letterSpacing: 0.6 }}
+          >
+            {d}
+          </Typography>
+        ))}
+      </Box>
       <DndContext
         sensors={sensors}
         onDragStart={handleDragStart}
