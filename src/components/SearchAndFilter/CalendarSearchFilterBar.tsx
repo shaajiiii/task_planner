@@ -120,9 +120,6 @@ const CalendarSearchFilterBar: React.FC = () => {
               </Box>
             )}
             MenuProps={{
-              PaperProps: {
-                style: { maxHeight: 224, width: 250 },
-              },
               anchorOrigin: {
                 vertical: "bottom",
                 horizontal: "left",
