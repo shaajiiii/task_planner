@@ -36,7 +36,7 @@ type Segment = {
 
 const TRACK_HEIGHT = 20;
 const TRACK_GAP = 6;
-const WEEK_ROW_HEIGHT = 130;
+const WEEK_ROW_HEIGHT = 110;
 const TOP_OFFSET__FOR_TASKS = 30;
 
 function getDayOfWeek(year: number, month: number, day: number): number {
